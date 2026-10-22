@@ -103,6 +103,8 @@ def main() -> int:
         "N_HUMAN": n(s["analysis_sample"]["human"]), "N_REPO": n(s["analysis_sample"]["repos"]),
         "LARGEST_REPO": s["largest_agent_repo"],
         "PARSE_ERR_PRS": n((ok["parse_errors"] > 0).sum()), "MISSING_BLOB_PRS": n((ok["missing_blobs"] > 0).sum()),
+        "PARSE_ERR_REPOS": n(ok[ok["parse_errors"] > 0]["repo"].nunique()),
+        "MISSING_BLOB_REPOS": n(ok[ok["missing_blobs"] > 0]["repo"].nunique()),
         "RENAME_PRS": n((ok.get("renamed_py", pd.Series(0, index=ok.index)).fillna(0) > 0).sum()),
         "RENAME_UNAVAIL": n((ok.get("rename_detection", pd.Series("ok", index=ok.index)) == "unavailable").sum()),
     }
