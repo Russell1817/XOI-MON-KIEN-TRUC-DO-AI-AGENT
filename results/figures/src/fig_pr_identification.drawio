@@ -5,11 +5,11 @@
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="lbl_main" value="&lt;b&gt;Nhánh chính&lt;/b&gt;&lt;br&gt;(first-parent)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=13;fontColor=#0B0B0B;" vertex="1" parent="1">
-          <mxGeometry x="10" y="150" width="110" height="40" as="geometry" />
+        <mxCell id="lbl_main" value="&lt;b&gt;Nhánh chính&lt;/b&gt;&lt;br&gt;(first-parent)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="0" y="145" width="130" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="lbl_branch" value="Nhánh PR #12" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=13;fontStyle=2;fontColor=#52514E;" vertex="1" parent="1">
-          <mxGeometry x="10" y="60" width="110" height="30" as="geometry" />
+        <mxCell id="lbl_branch" value="Nhánh PR #12" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=17;fontStyle=2;fontColor=#52514E;" vertex="1" parent="1">
+          <mxGeometry x="0" y="60" width="130" height="30" as="geometry" />
         </mxCell>
 
         <!-- main line commits -->
@@ -61,25 +61,25 @@
         </mxCell>
 
         <!-- annotations -->
-        <mxCell id="a_before" value="&lt;b&gt;trước&lt;/b&gt; = M^1" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=13;fontColor=#0B0B0B;" vertex="1" parent="1">
-          <mxGeometry x="220" y="190" width="110" height="24" as="geometry" />
+        <mxCell id="a_before" value="&lt;b&gt;trước&lt;/b&gt; = M^1" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="205" y="190" width="140" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="a_merge" value="&lt;b&gt;M&lt;/b&gt; = &quot;Merge pull request #12&quot;&lt;br&gt;(kiểu merge, 2 cha)&lt;br&gt;&lt;b&gt;sau&lt;/b&gt; = M" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=13;fontColor=#0B0B0B;" vertex="1" parent="1">
-          <mxGeometry x="395" y="190" width="200" height="60" as="geometry" />
+        <mxCell id="a_merge" value="&lt;b&gt;M&lt;/b&gt; =&lt;br&gt;&quot;Merge pull request #12&quot;&lt;br&gt;(kiểu merge, 2 cha)&lt;br&gt;&lt;b&gt;sau&lt;/b&gt; = M" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="380" y="190" width="230" height="86" as="geometry" />
         </mxCell>
-        <mxCell id="a_squash" value="&lt;b&gt;S&lt;/b&gt; = &quot;Sửa lỗi đăng nhập (#15)&quot;&lt;br&gt;(kiểu squash, 1 cha)&lt;br&gt;trước = S^1, sau = S" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=13;fontColor=#0B0B0B;" vertex="1" parent="1">
-          <mxGeometry x="615" y="190" width="200" height="60" as="geometry" />
+        <mxCell id="a_squash" value="&lt;b&gt;S&lt;/b&gt; =&lt;br&gt;&quot;Sửa lỗi đăng nhập (#15)&quot;&lt;br&gt;(kiểu squash, 1 cha)&lt;br&gt;trước = S^1, sau = S" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="600" y="190" width="230" height="86" as="geometry" />
         </mxCell>
-        <mxCell id="a_c5" value="commit không&lt;br&gt;đóng PR: bỏ qua" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=12;fontStyle=2;fontColor=#52514E;" vertex="1" parent="1">
-          <mxGeometry x="840" y="190" width="110" height="40" as="geometry" />
+        <mxCell id="a_c5" value="commit không&lt;br&gt;đóng PR: bỏ qua" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=16;fontStyle=2;fontColor=#52514E;" vertex="1" parent="1">
+          <mxGeometry x="830" y="190" width="140" height="50" as="geometry" />
         </mxCell>
 
         <!-- classification box -->
-        <mxCell id="cls" value="&lt;b&gt;Phân nhóm theo số PR:&lt;/b&gt; số có trong AIDev → &lt;b&gt;agent&lt;/b&gt;; số khác, trong ±6 tháng, không phải bot, không có dấu vết agent → &lt;b&gt;người&lt;/b&gt;.&lt;br&gt;Thay đổi của PR = diff(M^1, M): như nhau cho kiểu merge và squash." style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=13;fontColor=#3A3A38;align=left;spacingLeft=10;" vertex="1" parent="1">
-          <mxGeometry x="140" y="275" width="790" height="58" as="geometry" />
+        <mxCell id="cls" value="&lt;b&gt;Phân nhóm theo số PR:&lt;/b&gt; số có trong AIDev → &lt;b&gt;agent&lt;/b&gt;; số khác, trong cửa sổ ±6 tháng quanh các PR agent, không phải bot, không có dấu vết agent → &lt;b&gt;người&lt;/b&gt;.&lt;br&gt;Thay đổi của PR = diff(M^1, M): như nhau cho kiểu merge và squash." style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=17;fontColor=#3A3A38;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="130" y="295" width="810" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="legend" value="● commit đóng PR (được phân tích)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=12;fontColor=#2A78D6;" vertex="1" parent="1">
-          <mxGeometry x="640" y="60" width="290" height="30" as="geometry" />
+        <mxCell id="legend" value="● commit đóng PR (được phân tích)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=16;fontColor=#2A78D6;" vertex="1" parent="1">
+          <mxGeometry x="610" y="60" width="350" height="30" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

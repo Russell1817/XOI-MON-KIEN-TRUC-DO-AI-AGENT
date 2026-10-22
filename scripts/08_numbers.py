@@ -28,7 +28,7 @@ def n(x: float) -> str:
 def d(x: float, k: int = 2) -> str:
     if x is None or (isinstance(x, float) and math.isnan(x)):
         return "–"
-    return f"{x:.{k}f}".replace(".", ",")
+    return f"{x:.{k}f}".replace(".", ",").replace("-", "−")  # typographic minus sign
 
 
 def pct(x: float, k: int = 1) -> str:
@@ -233,6 +233,9 @@ def main() -> int:
     sample = ok[ok["repo"].isin(both[both.apply(lambda g: {"agent", "human"} <= g)].index)]
     # Repositories with measured agent PRs but no eligible human PR drop out of the comparison.
     lost = ok[ok["repo"].isin(both[both.apply(lambda g: "human" not in g)].index) & (ok["group"] == "agent")]["repo"].value_counts()
+    sa = sample[sample["group"] == "agent"]
+    codex_share = (sa["agent"] == "OpenAI_Codex").mean()
+    v |= {"CODEX_N": n((sa["agent"] == "OpenAI_Codex").sum()), "CODEX_SHARE": pct(codex_share, 0)}
     v |= {"NOHUMAN_REPOS": n(len(lost)), "NOHUMAN_AGENT_PRS": n(lost.sum()),
           "NOHUMAN_TOP_REPO": lost.index[0] if len(lost) else "", "NOHUMAN_TOP_PRS": n(lost.iloc[0]) if len(lost) else "0"}
     pos = sample[sample["added_edges"] > 0]
@@ -278,6 +281,7 @@ def main() -> int:
                  and q4.loc["new_cycle (rate)", "rate_human"] > 5 * strata[(strata["stratum"] == "Q1") & (strata["metric"] == "new_cycle (rate)")]["rate_human"].iloc[0]),
         "Data: close to half of measured agent PRs are in repositories without human PRs (\"Gần một nửa\")":
             0.4 <= lost.sum() / (ok["group"] == "agent").sum() < 0.5,
+        "Data: OpenAI Codex is close to half of the agent sample (\"gần một nửa\")": 0.4 <= codex_share < 0.5,
         "Data: agent PRs larger than human PRs (median LOC)": t1.loc["agent", "median_loc"] > t1.loc["human", "median_loc"],
         "Size strata: Q4 added-edge share lower for agents and significant":
             q4.loc["added_edges", "share_pos_agent"] < q4.loc["added_edges", "share_pos_human"]
