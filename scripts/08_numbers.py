@@ -214,6 +214,9 @@ def main() -> int:
         sig = [AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] < 0.05]
         v["CC_E100_SIG_VS"] = ", ".join(sig) if sig else "không agent nào"
         v["CC_E100_NS_VS"] = ", ".join(AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] >= 0.05) or "không agent nào"
+        ns = [AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] >= 0.05]
+        v["CC_E100_CLAUSE"] = (f"khác {v['CC_E100_SIG_VS']}, nhưng không khác {', '.join(ns)}" if ns and sig
+                               else "khác tất cả các agent còn lại" if sig else "không khác agent nào")
 
     v |= {"MANUAL_N": n(len(manual)), "MANUAL_MATCH": n((manual["match"] == "yes").sum())}
 

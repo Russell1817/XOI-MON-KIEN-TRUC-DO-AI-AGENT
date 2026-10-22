@@ -90,6 +90,19 @@ def commit_messages(repo: Path, rev_range: str) -> str:
     return git(repo, "log", "--format=%an <%ae>%n%B", rev_range, check=False)
 
 
+def pr_author(repo: Path, c: "PRCommit") -> str:
+    """'name <email>' of the PR's author.
+
+    A squash commit is authored by the PR author. A merge commit is authored by whoever merged, so the
+    author of the first commit on the PR branch (M^1..M^2, oldest first) is used instead.
+    """
+    if c.style != "merge":
+        return f"{c.author} <{c.email}>"
+    out = git(repo, "log", "--reverse", "--format=%an <%ae>", f"{c.parents[0]}..{c.parents[1]}", check=False)
+    first = out.splitlines()[0] if out.strip() else ""
+    return first or f"{c.author} <{c.email}>"
+
+
 def ls_py(repo: Path, commit: str) -> list[tuple[str, str]]:
     """(path, blob sha) of every .py file in a commit."""
     out = git(repo, "ls-tree", "-r", "-z", commit)

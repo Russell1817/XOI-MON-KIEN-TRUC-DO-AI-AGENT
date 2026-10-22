@@ -101,7 +101,7 @@ paths:
   raw: data/raw
   interim: data/interim
   processed: data/processed
-  repos: repos
+  repos: repos/run4   # fresh clone folder for this run (older partial clones left untouched)
   tables: results/tables
   figures: results/figures
   manual_check: results/manual_check

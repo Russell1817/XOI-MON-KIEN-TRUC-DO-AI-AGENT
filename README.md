@@ -65,7 +65,7 @@ will be added to this repository when the paper is published.
 uv python install 3.12
 uv sync
 uv run python scripts/00_check_env.py        # environment report
-uv run pytest -q                             # 15 unit tests
+uv run pytest -q                             # 16 unit tests
 
 uv run python scripts/01_download_aidev.py   # ~1.4 GB, pinned dataset revision
 uv run python scripts/02_filter_agent_prs.py

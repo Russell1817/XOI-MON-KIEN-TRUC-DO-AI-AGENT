@@ -189,3 +189,29 @@ def test_moved_file_adds_no_edges(tmp_path):
     assert added == [] and m["added_edges"] == 0
     m_naive, added_naive, _ = compute(g0, g1, changed, 0.10)
     assert added_naive == [("app/new/tool.py", "app/core.py")]  # what the old method counted
+
+
+def test_bot_pr_merged_by_a_human_is_detected(tmp_path):
+    # A merge commit is authored by whoever merged; the PR author is the first commit on the branch.
+    from aierosion.data.filters import has_agent_trace, is_bot_pr
+
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _commit(repo, {"app/__init__.py": ""}, "init")
+    _git(repo, "checkout", "-q", "-b", "pre-commit-ci-update-config")
+    (repo / "app/x.py").write_text("x = 1\n")
+    _git(repo, "add", "-A")
+    _git(repo, "-c", "user.name=pre-commit-ci[bot]", "-c", "user.email=66853113+pre-commit-ci[bot]@users.noreply.github.com",
+         "commit", "-q", "-m", "[pre-commit.ci] auto fixes")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "-c", "user.name=Maintainer", "-c", "user.email=m@example.org", "merge", "-q", "--no-ff",
+         "-m", "Merge pull request #9 from org/pre-commit-ci-update-config", "pre-commit-ci-update-config")
+    (c,) = gitrepo.first_parent_pr_commits(repo)
+    assert c.style == "merge" and c.author == "Maintainer"
+    author = gitrepo.pr_author(repo, c)
+    assert author.startswith("pre-commit-ci[bot]")
+    assert is_bot_pr(author, c.message.split("\n", 1)[0])
+    assert not is_bot_pr("Jane Doe <jane@example.org>", "Fix parser (#10)")
+    assert has_agent_trace("Co-authored-by: Claude <noreply@anthropic.com>")
+    assert not has_agent_trace("Refactor the parser")

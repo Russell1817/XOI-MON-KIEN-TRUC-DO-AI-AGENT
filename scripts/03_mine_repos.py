@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 import json
 import random
-import re
 import sys
 import time
 import traceback
@@ -19,7 +18,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 from aierosion.config import path, settings
-from aierosion.data.filters import is_source_py
+from aierosion.data.filters import has_agent_trace, is_bot_pr, is_source_py
 from aierosion.git import repo as gitrepo
 from aierosion.graph.build import GraphBuilder
 from aierosion.metrics.compute import compute
@@ -68,8 +67,6 @@ def mine_repo(full_name: str, agent_prs: list[dict], aidev_numbers: list[int]) -
             by_number.setdefault(c.number, c)
         info["pr_commits_on_default_branch"] = len(by_number)
 
-        bot_re = [re.compile(p) for p in hcfg["bot_author_patterns"]]
-        trace_re = [re.compile(p, re.I) for p in hcfg["agent_trace_patterns"]]
         aidev = set(aidev_numbers)
 
         selected = []
@@ -85,13 +82,14 @@ def mine_repo(full_name: str, agent_prs: list[dict], aidev_numbers: list[int]) -
             if n in aidev or not (lo <= _parse_date(c.date) <= hi):
                 continue
             human_counts["in_window"] += 1
-            if any(r.search(f"{c.author} <{c.email}>") for r in bot_re):
+            # For merge commits the commit author is whoever merged; use the PR branch's first author.
+            if is_bot_pr(gitrepo.pr_author(clone_dir, c), c.message.split("\n", 1)[0]):
                 human_counts["bot"] += 1
                 continue
             text = c.message
             if c.style == "merge":
                 text += "\n" + gitrepo.commit_messages(clone_dir, f"{c.parents[0]}..{c.parents[1]}")
-            if any(r.search(text) for r in trace_re):
+            if has_agent_trace(text):
                 human_counts["agent_trace"] += 1
                 continue
             human_pool.append(c)
@@ -119,15 +117,17 @@ def mine_repo(full_name: str, agent_prs: list[dict], aidev_numbers: list[int]) -
                            author=c.author)
                 try:
                     changed = gitrepo.changed_files(clone_dir, c.parents[0], c.sha)
+                    moved = gitrepo.renames(clone_dir, c.parents[0], c.sha)
                     py = {f for _, f in changed if is_source_py(f)}
-                    row.update(files_changed=len(changed), py_files_changed=len(py),
+                    # changed_files lists a rename as delete + add; count a moved file once.
+                    row.update(files_changed=len(changed) - len(moved or {}),
+                               py_files_changed=len(py) - sum(is_source_py(n) for n in (moved or {}).values()),
                                loc_changed=gitrepo.loc_changed(clone_dir, c.parents[0], c.sha))
                     if not py:
                         row["status"] = "no_py_source_change"
                         rows.append(row)
                         continue
                     g0, g1 = builder.build(c.parents[0]), builder.build(c.sha)
-                    moved = gitrepo.renames(clone_dir, c.parents[0], c.sha)
                     metrics, added, added_pkg = compute(g0, g1, py, cfg["graph"]["core_module_top_fraction"],
                                                         renames=moved)
                     row.update(metrics, status="ok", renamed_py=sum(f.endswith(".py") for f in (moved or {})),
