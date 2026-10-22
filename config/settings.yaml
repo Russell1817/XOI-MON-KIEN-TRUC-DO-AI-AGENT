@@ -101,7 +101,7 @@ paths:
   raw: data/raw
   interim: data/interim
   processed: data/processed
-  repos: repos
+  repos: repos/run5   # fresh clone folder for run 5 (import kinds, split cycle indicator)
   tables: results/tables
   figures: results/figures
   manual_check: results/manual_check

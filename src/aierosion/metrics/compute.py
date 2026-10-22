@@ -83,6 +83,10 @@ def compute(
     ]
 
     added_pkg = pe1 - pe0
+    new_cycle = bool(cyc_pe1 - cyc_pe0)
+    # Split of new_cycle: a package that was not in any cycle now is (a cycle formed or grew),
+    # versus a new edge inside a cycle whose packages were all cyclic already.
+    cycle_new_pkgs = bool(cyc_pkg1 - cyc_pkg0)
     return {
         "modules_before": len(before.files),
         "packages_before": len(pn0),
@@ -94,9 +98,25 @@ def compute(
         "d_cyclic_modules": len(cyc_mod1) - len(cyc_mod0),
         "cyclic_pkgs_before": len(cyc_pkg0),
         "d_cyclic_pkgs": len(cyc_pkg1) - len(cyc_pkg0),
-        "new_cycle": int(bool(cyc_pe1 - cyc_pe0)),
+        "new_cycle": int(new_cycle),
+        "cycle_new_pkgs": int(cycle_new_pkgs),
+        "cycle_existing_only": int(new_cycle and not cycle_new_pkgs),
+        "pkgs_touched": len({package_of(f) for f in changed_py}),
         "d_ce_mean": _mean([float(x) for x in d_ce]),
         "d_i_core": _mean(d_i),
         "missing_blobs": before.missing_blobs + after.missing_blobs,
         "parse_errors": before.parse_errors + after.parse_errors,
     }, sorted(added), sorted(added_pkg)
+
+
+def variant_metrics(before: DepGraph, after: DepGraph, renames: dict[str, str] | None, suffix: str) -> dict:
+    """The main indicators on another graph variant, for the sensitivity analysis."""
+    before = apply_renames(before, renames or {})
+    pn0, pe0 = package_graph(before)
+    pn1, pe1 = package_graph(after)
+    cyc_pkg0, cyc_pe0 = _cyclic(pn0, pe0)
+    cyc_pkg1, cyc_pe1 = _cyclic(pn1, pe1)
+    return {f"added_edges_{suffix}": len(after.edges - before.edges),
+            f"added_pkg_edges_{suffix}": len(pe1 - pe0),
+            f"new_cycle_{suffix}": int(bool(cyc_pe1 - cyc_pe0)),
+            f"cycle_new_pkgs_{suffix}": int(bool(cyc_pkg1 - cyc_pkg0))}

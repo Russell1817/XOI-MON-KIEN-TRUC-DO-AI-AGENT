@@ -21,7 +21,7 @@ from aierosion.config import path, settings
 from aierosion.data.filters import has_agent_trace, is_bot_pr, is_source_py
 from aierosion.git import repo as gitrepo
 from aierosion.graph.build import GraphBuilder
-from aierosion.metrics.compute import compute
+from aierosion.metrics.compute import compute, variant_metrics
 from aierosion.runlog import log_run
 
 LINTER_FILES = [".importlinter", "setup.cfg", "pyproject.toml", "tox.ini"]
@@ -130,6 +130,8 @@ def mine_repo(full_name: str, agent_prs: list[dict], aidev_numbers: list[int]) -
                     g0, g1 = builder.build(c.parents[0]), builder.build(c.sha)
                     metrics, added, added_pkg = compute(g0, g1, py, cfg["graph"]["core_module_top_fraction"],
                                                         renames=moved)
+                    for variant in ("all", "top"):
+                        metrics.update(variant_metrics(g0.variant(variant), g1.variant(variant), moved, variant))
                     row.update(metrics, status="ok", renamed_py=sum(f.endswith(".py") for f in (moved or {})),
                                rename_detection="ok" if moved is not None else "unavailable")
                     edges.append({"repo": full_name, "number": c.number, "group": group,

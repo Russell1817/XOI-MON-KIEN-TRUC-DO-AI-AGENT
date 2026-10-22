@@ -10,8 +10,8 @@ import pytest
 from aierosion.data.filters import is_source_py
 from aierosion.git import repo as gitrepo
 from aierosion.graph.build import GraphBuilder
-from aierosion.graph.imports import ModuleIndex, module_parts, package_of, parse_imports
-from aierosion.metrics.compute import compute
+from aierosion.graph.imports import ModuleIndex, module_parts, package_of, parse_import_kinds, parse_imports
+from aierosion.metrics.compute import compute, variant_metrics
 
 
 def test_module_parts_and_package():
@@ -164,6 +164,8 @@ def test_graph_and_metrics_on_git_repo(tmp_path):
     assert m["added_edges"] == 1 and m["removed_edges"] == 0
     assert m["cyclic_pkgs_before"] == 0 and m["d_cyclic_pkgs"] == 3 and m["new_cycle"] == 1
     assert m["d_cyclic_modules"] == 3
+    assert m["cycle_new_pkgs"] == 1 and m["cycle_existing_only"] == 0  # the cycle is new
+    assert m["pkgs_touched"] == 1
     assert m["d_ce_mean"] == 1.0  # app.models gains one efferent package
     assert not math.isnan(m["d_i_core"])
     assert gitrepo.loc_changed(repo, c0, c1) == 1
@@ -215,3 +217,48 @@ def test_bot_pr_merged_by_a_human_is_detected(tmp_path):
     assert not is_bot_pr("Jane Doe <jane@example.org>", "Fix parser (#10)")
     assert has_agent_trace("Co-authored-by: Claude <noreply@anthropic.com>")
     assert not has_agent_trace("Refactor the parser")
+
+
+def test_import_kinds():
+    src = (b"import a\n"
+           b"from typing import TYPE_CHECKING\n"
+           b"if TYPE_CHECKING:\n    import b\n    def f():\n        import c\nelse:\n    import d\n"
+           b"if typing.TYPE_CHECKING:\n    import e\n"
+           b"def g():\n    import h\n"
+           b"class K:\n    import m\n")
+    kinds = {spec[1]: kind for spec, kind in parse_import_kinds(src)}
+    assert kinds == {"a": "top", "typing": "top", "b": "typecheck", "c": "typecheck", "d": "top",
+                     "e": "typecheck", "h": "func", "m": "top"}
+    assert parse_import_kinds(b"def broken(:\n") is None
+
+
+def test_graph_variants_and_existing_cycle(tmp_path):
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    c0 = _commit(repo, {
+        "app/__init__.py": "",
+        "app/a/__init__.py": "", "app/a/x.py": "from app.b import y\n",
+        "app/b/__init__.py": "", "app/b/y.py": "from app.d import u\n",
+        "app/d/__init__.py": "", "app/d/u.py": "from app.a import x\n",
+        "app/c/__init__.py": "", "app/c/z.py": "",
+    }, "init")
+    # Packages a -> b -> d -> a already form a cycle. The PR adds b -> a inside it, a type-only
+    # import c -> a, and a function-level import a -> c.
+    c1 = _commit(repo, {
+        "app/b/y.py": "from app.d import u\nfrom app.a import x\n",
+        "app/c/z.py": "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from app.a import x\n",
+        "app/a/x.py": "from app.b import y\ndef f():\n    from app.c import z\n",
+    }, "Edges (#3)")
+    b = GraphBuilder(repo)
+    g0, g1 = b.build(c0), b.build(c1)
+    b.close()
+    changed = {f for _, f in gitrepo.changed_files(repo, c0, c1)}
+    m, added, _ = compute(g0, g1, changed, 0.10)
+    # main (runtime) variant: y -> x and x -> z; the type-only z -> x is left out
+    assert set(added) == {("app/b/y.py", "app/a/x.py"), ("app/a/x.py", "app/c/z.py")}
+    assert m["new_cycle"] == 1 and m["cycle_new_pkgs"] == 0 and m["cycle_existing_only"] == 1
+    v_all = variant_metrics(g0.variant("all"), g1.variant("all"), None, "all")
+    assert v_all["added_edges_all"] == 3 and v_all["cycle_new_pkgs_all"] == 1  # c joins the cycle
+    v_top = variant_metrics(g0.variant("top"), g1.variant("top"), None, "top")
+    assert v_top["added_edges_top"] == 1 and v_top["cycle_new_pkgs_top"] == 0

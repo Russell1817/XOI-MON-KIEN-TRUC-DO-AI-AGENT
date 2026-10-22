@@ -12,21 +12,66 @@ ImportSpec = tuple[int, str, tuple[str, ...]]
 STDLIB = frozenset(sys.stdlib_module_names)
 
 
-def parse_imports(source: bytes) -> list[ImportSpec] | None:
-    """All import statements in a file, including those inside functions. None on syntax error."""
+# Where an import statement sits: module level ("top"), inside a function or lambda ("func"),
+# or under `if TYPE_CHECKING:` ("typecheck", never executed at run time).
+IMPORT_KINDS = ("top", "func", "typecheck")
+
+
+def _is_type_checking(test: ast.expr) -> bool:
+    return (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+        isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING")
+
+
+class _ImportVisitor(ast.NodeVisitor):
+    def __init__(self):
+        self.found: list[tuple[ImportSpec, str]] = []
+        self.kind = "top"
+
+    def _inside(self, node, kind):
+        outer, self.kind = self.kind, ("typecheck" if "typecheck" in (self.kind, kind) else kind)
+        self.generic_visit(node)
+        self.kind = outer
+
+    def visit_FunctionDef(self, node):
+        self._inside(node, "func")
+
+    visit_AsyncFunctionDef = visit_Lambda = visit_FunctionDef
+
+    def visit_If(self, node):
+        if _is_type_checking(node.test):
+            for child in node.body:
+                outer, self.kind = self.kind, "typecheck"
+                self.visit(child)
+                self.kind = outer
+            for child in node.orelse:
+                self.visit(child)
+        else:
+            self.generic_visit(node)
+
+    def visit_Import(self, node):
+        self.found.extend(((0, a.name, ()), self.kind) for a in node.names)
+
+    def visit_ImportFrom(self, node):
+        self.found.append(((node.level, node.module or "", tuple(a.name for a in node.names)), self.kind))
+
+
+def parse_import_kinds(source: bytes) -> list[tuple[ImportSpec, str]] | None:
+    """Every import statement in a file with its kind (see IMPORT_KINDS). None on syntax error."""
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             tree = ast.parse(source)
     except (SyntaxError, ValueError, MemoryError, RecursionError):
         return None
-    specs: list[ImportSpec] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            specs.extend((0, a.name, ()) for a in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            specs.append((node.level, node.module or "", tuple(a.name for a in node.names)))
-    return specs
+    v = _ImportVisitor()
+    v.visit(tree)
+    return v.found
+
+
+def parse_imports(source: bytes) -> list[ImportSpec] | None:
+    """All import statements in a file, including those inside functions. None on syntax error."""
+    found = parse_import_kinds(source)
+    return None if found is None else [spec for spec, _ in found]
 
 
 def module_parts(path: str) -> tuple[str, ...]:
