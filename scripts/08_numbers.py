@@ -36,11 +36,23 @@ def pct(x: float, k: int = 1) -> str:
 
 
 def p(x: float) -> str:
+    """p-value with its relation sign, for prose: "= 0,137" or "< 0,001"."""
     if x is None or (isinstance(x, float) and math.isnan(x)):
         return "–"
     if x < 0.001:
         return "< 0,001"
-    return d(x, 3)
+    return "= " + d(x, 3)
+
+
+def rng(text: str) -> str:
+    """'286-186659' -> '286–186.659'."""
+    a, b = text.split("-")
+    return f"{n(float(a))}–{n(float(b))}"
+
+
+def pt(x: float) -> str:
+    """p-value for a table cell (no sign unless it is a bound)."""
+    return p(x).removeprefix("= ")
 
 
 def main() -> int:
@@ -56,9 +68,13 @@ def main() -> int:
     funnel = pd.read_csv(path("logs") / "filter_funnel.csv")
     mining = pd.read_csv(path("logs") / "mining_repos.csv")
     metrics = pd.read_csv(path("processed") / "pr_metrics.csv", low_memory=False)
-    manual = pd.read_csv(path("manual_check") / "manual_check.csv")
+    manual_file = path("manual_check") / "manual_check.csv"
+    manual = pd.read_csv(manual_file) if manual_file.exists() else pd.DataFrame(columns=["match"])
     review_file = path("manual_check") / "violations_review.csv"
     review = pd.read_csv(review_file) if review_file.exists() and review_file.stat().st_size > 2 else pd.DataFrame()
+    if len(review):
+        # verdicts are read back as booleans by pandas; normalise to "true"/"false"
+        review["verdict"] = review["verdict"].astype(str).str.strip().str.lower()
 
     v: dict[str, str] = {}
     funnel_labels = ["AIDev-pop ban đầu", "Ngôn ngữ chính Python, không phải fork",
@@ -113,10 +129,10 @@ def main() -> int:
     for m, lab in labels.items():
         r = rq1.loc[m]
         rows.append(f"| {lab} | {d(r['mean_agent'], 3)} ({pct(r['share_pos_agent'])}) | "
-                    f"{d(r['mean_human'], 3)} ({pct(r['share_pos_human'])}) | {d(r['cliffs_delta'], 3)} | {p(r['p_holm'])} |")
+                    f"{d(r['mean_human'], 3)} ({pct(r['share_pos_human'])}) | {d(r['cliffs_delta'], 3)} | {pt(r['p_holm'])} |")
     c = rq1.loc["new_cycle (rate)"]
     rows.append(f"| Chu trình mới (tỷ lệ PR) | {pct(c['rate_agent'], 2)} ({n(c['k_agent'])}/{n(c['n_agent'])}) | "
-                f"{pct(c['rate_human'], 2)} ({n(c['k_human'])}/{n(c['n_human'])}) | OR = {d(c['odds_ratio'])} | {p(c['p_holm'])} |")
+                f"{pct(c['rate_human'], 2)} ({n(c['k_human'])}/{n(c['n_human'])}) | OR = {d(c['odds_ratio'])} | {pt(c['p_holm'])} |")
     v["TABLE_RQ1"] = "\n".join(rows)
     for m, key in (("added_edges", "EDGES"), ("edges_per_file", "EPF"), ("d_cyclic_pkgs", "DCYC"),
                    ("d_ce_mean", "DCE"), ("d_i_core", "DI"), ("added_pkg_edges", "PKGE")):
@@ -134,15 +150,15 @@ def main() -> int:
     rows = ["| Nhóm quy mô (số dòng) | Chỉ số | Agent | Người | Hiệu ứng | p (Holm) |", "|---|---|---|---|---|---|"]
     for _, r in strata.iterrows():
         if r["metric"] == "added_edges":
-            rows.append(f"| {r['stratum']} ({r['loc_range'].replace('-', '–')}) | % PR thêm cạnh | {pct(r['share_pos_agent'])} "
+            rows.append(f"| {r['stratum']} ({rng(r['loc_range'])}) | % PR thêm cạnh | {pct(r['share_pos_agent'])} "
                         f"(n = {n(r['n_agent'])}) | {pct(r['share_pos_human'])} (n = {n(r['n_human'])}) | "
-                        f"δ = {d(r['cliffs_delta'], 3)} | {p(r['p_holm'])} |")
+                        f"δ = {d(r['cliffs_delta'], 3)} | {pt(r['p_holm'])} |")
         else:
             rows.append(f"| | % PR tạo chu trình | {pct(r['rate_agent'], 2)} | {pct(r['rate_human'], 2)} | "
-                        f"OR = {d(r['odds_ratio'])} | {p(r['p_holm'])} |")
+                        f"OR = {d(r['odds_ratio'])} | {pt(r['p_holm'])} |")
     v["TABLE_STRATA"] = "\n".join(rows)
     q4 = strata[strata["stratum"] == "Q4"].set_index("metric")
-    v |= {"Q4_RANGE": q4.loc["added_edges", "loc_range"].replace("-", "–"),
+    v |= {"Q4_RANGE": rng(q4.loc["added_edges", "loc_range"]),
           "Q4_EDGES_A": pct(q4.loc["added_edges", "share_pos_agent"]), "Q4_EDGES_H": pct(q4.loc["added_edges", "share_pos_human"]),
           "Q4_EDGES_DELTA": d(q4.loc["added_edges", "cliffs_delta"], 3), "Q4_EDGES_P": p(q4.loc["added_edges", "p_holm"]),
           "Q4_CYC_A": pct(q4.loc["new_cycle (rate)", "rate_agent"], 1), "Q4_CYC_H": pct(q4.loc["new_cycle (rate)", "rate_human"], 1),
@@ -208,6 +224,13 @@ def main() -> int:
     pos_a, pos_h = pos[pos["group"] == "agent"]["added_edges"], pos[pos["group"] == "human"]["added_edges"]
     v |= {"ECDF_MED_A": d(pos_a.median(), 0), "ECDF_MED_H": d(pos_h.median(), 0),
           "ECDF_MAX_A": n(pos_a.max()), "ECDF_MAX_H": n(pos_h.max())}
+    # English-formatted variants for the English abstract (decimal point, comma thousands separator).
+    import re as _re
+
+    def en(text: str) -> str:
+        return _re.sub(r"\d[\d.,]*\d|\d", lambda m: m.group(0).translate(str.maketrans({".": ",", ",": "."})), text)
+
+    v |= {f"{k}_EN": en(val) for k, val in list(v.items()) if "\n" not in val}
     out = t / "numbers.json"
     out.write_text(json.dumps(v, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{len(v)} values -> {out}")
@@ -267,7 +290,7 @@ def main() -> int:
         }
     if len(review):
         claims["Violation review completed (every flagged edge has a verdict)"] = bool(review["verdict"].isin(["true", "false"]).all())
-    claims["Manual check: every sampled PR matches"] = bool((manual["match"] == "yes").all())
+    claims["Manual check: sample reviewed and every sampled PR matches"] = bool(len(manual)) and bool((manual["match"] == "yes").all())
     result = {k_: bool(ok_) for k_, ok_ in claims.items()}
     (t / "claims.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     failed = [k_ for k_, ok_ in result.items() if not ok_]

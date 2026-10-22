@@ -83,6 +83,21 @@ def test_external_library_sharing_nested_name():
         "autogen_ext/code_executors/docker/__init__.py"}
 
 
+def test_external_package_named_like_a_subpackage():
+    # crewAI case: `from agents import Agent` (OpenAI Agents SDK) must not resolve to src/crewai/agents,
+    # because crewai/ is a package, not a sys.path root.
+    idx = ModuleIndex([
+        "src/crewai/__init__.py", "src/crewai/agents/__init__.py",
+        "src/crewai/agents/agent_adapters/__init__.py", "src/crewai/agents/agent_adapters/openai/adapter.py",
+    ])
+    assert idx.resolve("src/crewai/agents/agent_adapters/openai/adapter.py", (0, "agents", ("Agent",))) == set()
+    assert idx.resolve("src/crewai/agents/agent_adapters/openai/adapter.py", (0, "crewai.agents", ())) == {
+        "src/crewai/agents/__init__.py"}
+    # A script importing a sibling folder of its own directory (sys.path[0]) still resolves.
+    idx2 = ModuleIndex(["tool/__init__.py", "tool/manual_build.py", "tool/build/__init__.py", "tool/build/common.py"])
+    assert idx2.resolve("tool/manual_build.py", (0, "build.common", ("sha",))) == {"tool/build/common.py"}
+
+
 def test_src_used_as_a_real_package():
     # AGI-Alpha-Agent case: `from src.monitoring import metrics` with src/__init__.py present.
     idx = ModuleIndex(["src/__init__.py", "src/monitoring/__init__.py", "src/monitoring/metrics.py", "app/x.py"])

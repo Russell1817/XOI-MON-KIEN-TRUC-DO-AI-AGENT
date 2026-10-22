@@ -70,6 +70,8 @@ class ModuleIndex:
             for i in range(1, len(parts)):
                 suffix[".".join(parts[i:])]["/".join(parts[:i])].add(name)
         self.by_suffix = suffix
+        # Directories that are packages (contain __init__.py), in the same src-stripped namespace.
+        self.pkg_dirs = {"/".join(module_parts(p)) for p in paths if p.endswith("__init__.py")}
 
     def _lookup(self, name: str, importer: str | None) -> str | None:
         if name in self.by_name:
@@ -80,11 +82,15 @@ class ModuleIndex:
         # sys.path. Accept a suffix match only when the importing file lives under that same root,
         # so that an external library sharing a name with some nested module is not linked.
         # The deepest enclosing root wins; an ambiguous match at that root is rejected.
+        # A root is a plausible sys.path entry only if it is not itself a package, or if it is the
+        # importing script's own directory (sys.path[0] when a script is run directly).
         roots = self.by_suffix[name]
         dirs = (importer[4:] if importer.startswith("src/") else importer).split("/")[:-1]
+        own_dir = "/".join(dirs)
         for k in range(len(dirs), 0, -1):
-            hits = roots.get("/".join(dirs[:k]))
-            if hits:
+            root = "/".join(dirs[:k])
+            hits = roots.get(root)
+            if hits and (root not in self.pkg_dirs or root == own_dir):
                 return self.by_name[next(iter(hits))] if len(hits) == 1 else None
         return None
 

@@ -35,14 +35,26 @@ plt.rcParams.update({
 VI_NUM = FuncFormatter(lambda v, _: f"{v:g}".replace(".", ","))  # Vietnamese decimal comma
 
 
+AGENT_NAMES = {"OpenAI_Codex": "OpenAI Codex", "Copilot": "GitHub Copilot", "Claude_Code": "Claude Code",
+               "Cursor": "Cursor", "Devin": "Devin", "Google_Jules": "Google Jules"}
+
+
+def vi_int(x: int) -> str:
+    """Integer with dot thousands separator (Vietnamese convention)."""
+    return f"{int(x):,}".replace(",", ".")
+
+
 def vi(x: float, digits: int = 1) -> str:
     return f"{x:.{digits}f}".replace(".", ",")
 
 
 def save(fig, name: str) -> None:
+    # Decimal comma only on purely numeric axes (default ScalarFormatter); category labels set with
+    # set_yticks(..., labels) or set_xticks(..., labels) must stay untouched.
     for ax in fig.get_axes():
-        ax.xaxis.set_major_formatter(VI_NUM) if ax.get_xscale() == "linear" and ax.get_xticklabels() and not ax.get_xticklabels()[0].get_text().startswith("Q") else None
-        ax.yaxis.set_major_formatter(VI_NUM) if ax.get_yscale() == "linear" and not ax.get_yticks().size == 0 and ax.yaxis.get_major_formatter().__class__.__name__ != "FixedFormatter" else None
+        for axis in (ax.xaxis, ax.yaxis):
+            if type(axis.get_major_formatter()) is matplotlib.ticker.ScalarFormatter:
+                axis.set_major_formatter(VI_NUM)
     out = path("figures")
     fig.savefig(out / f"{name}.svg", bbox_inches="tight")
     fig.savefig(out / f"{name}.png", dpi=300, bbox_inches="tight")
@@ -106,7 +118,7 @@ def rates_by_group(d: pd.DataFrame) -> None:
         ax.errorbar(s["rate"] * 100, y, xerr=[(s["rate"] - s["lo"]) * 100, (s["hi"] - s["rate"]) * 100],
                     fmt=marker, color=color, ms=6, mec="white", mew=0.8, elinewidth=1.6, capsize=0, label=name)
         for hv, xv, yv, k, n in zip(s["hi"] * 100, s["rate"] * 100, y, s["k"], s["n"]):
-            ax.text(hv + 0.6, yv, f"{vi(xv)}% ({k}/{n})", fontsize=7, color=MUTED, va="center")
+            ax.text(hv + 0.6, yv, f"{vi(xv)}% ({vi_int(k)}/{vi_int(n)})", fontsize=7, color=MUTED, va="center")
     ax.set_yticks(range(len(labels)), labels)
     ax.invert_yaxis()
     ax.set_xlabel("Tỷ lệ PR (%), thanh ngang: khoảng tin cậy Wilson 95%")
@@ -133,7 +145,7 @@ def size_strata(d: pd.DataFrame) -> None:
             ax.errorbar(x, y, yerr=[[a - b for a, b in zip(y, lo)], [b - a for a, b in zip(y, hi)]], fmt=marker + "-",
                         color=color, ms=5, lw=1.6, elinewidth=1.2, mec="white", mew=0.7, label=name)
         ax.set_title(title, fontsize=9, color=INK, loc="left")
-        ax.set_xticks(range(4), [f"{q}\n{int(r['min'])}–{int(r['max'])}" for q, r in bounds.iterrows()], fontsize=7.5)
+        ax.set_xticks(range(4), [f"{q}\n{vi_int(r['min'])}–{vi_int(r['max'])}" for q, r in bounds.iterrows()], fontsize=7.5)
         ax.set_ylim(bottom=0)
         ax.grid(axis="x", visible=False)
     axes[0].set_ylabel("Tỷ lệ PR (%)")
@@ -159,7 +171,7 @@ def per_agent() -> None:
         ax.set_title(title, fontsize=9, color=INK, loc="left")
         ax.set_xlim(left=0)
         ax.grid(axis="y", visible=False)
-    axes[0].set_yticks(range(len(t)), [f"{a.replace('_', ' ')} (n={n})" for a, n in zip(t["agent"], t["prs"])])
+    axes[0].set_yticks(range(len(t)), [f"{AGENT_NAMES.get(a, a)} (n = {vi_int(n)})" for a, n in zip(t["agent"], t["prs"])])
     for ax in axes:
         ax.set_xlabel("Tỷ lệ PR (%), khoảng tin cậy Wilson 95%", fontsize=8, color=INK, labelpad=6)
     save(fig, "fig5_per_agent")
@@ -172,7 +184,7 @@ def edges_distribution(d: pd.DataFrame) -> None:
         color, marker, name = STYLE[grp]
         x = d[(d["group"] == grp) & (d["added_edges"] > 0)]["added_edges"].sort_values().to_numpy()
         y = (pd.Series(range(1, len(x) + 1)) / len(x)).to_numpy()
-        ax.step(x, y * 100, where="post", color=color, lw=2, label=f"{name} (n = {len(x):,})".replace(",", "."))
+        ax.step(x, y * 100, where="post", color=color, lw=2, label=f"{name} (n = {vi_int(len(x))})")
         med = float(pd.Series(x).median())
         ax.plot([med], [50], marker=marker, color=color, ms=7, mec="white", mew=0.8, ls="none")
     ax.set_xscale("log")
