@@ -1,0 +1,108 @@
+# Central settings for the pipeline. Change values here, never inside scripts.
+# Any change after a run must also be logged in KE_HOACH/NHAT_KY.md.
+
+seed: 42
+
+aidev:
+  repo_id: hao-li/AIDev
+  # Pinned dataset revision (commit sha on Hugging Face), checked 2026-10-21.
+  revision: 7840b6e61a5828461cd96806c52c20194ef57979
+  # AIDev-pop tables (repositories with > 100 stars).
+  tables:
+    - pull_request
+    - repository
+    - pr_commits
+    - pr_commit_details
+  # Fallback only, if AIDev-pop yields too few Python PRs (1.5 GB).
+  fallback_tables:
+    - all_pull_request
+    - all_repository
+
+agents:
+  - Claude_Code
+  - OpenAI_Codex
+  - Copilot
+  - Cursor
+  - Devin
+  - Google_Jules
+  # Labels confirmed against pull_request.parquet on 2026-10-21.
+
+filter:
+  language: Python
+  # Only repositories whose license (GitHub SPDX id, from AIDev `repository.license`) grants reuse.
+  # Repositories with no license or NOASSERTION are excluded: their code is all rights reserved.
+  allowed_licenses: [MIT, Apache-2.0, GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1, LGPL-3.0, BSD-2-Clause,
+                     BSD-3-Clause, ISC, MPL-2.0, Unlicense, CC0-1.0, CC-BY-4.0, ODbL-1.0]
+  merged_only: true
+  min_agent_prs_per_repo: 3
+  # A PR counts only if it changes at least one .py file outside these paths.
+  excluded_path_patterns:
+    - "(^|/)tests?/"
+    - "(^|/)test_[^/]*\\.py$"
+    - "_test\\.py$"
+    - "_tests\\.py$"
+    - "(^|/)docs?/"
+    - "(^|/)examples?/"
+    - "(^|/)setup\\.py$"
+    - "(^|/)conftest\\.py$"
+  # Pass criteria for step 02.
+  min_total_agent_prs: 300
+  min_repos: 30
+  min_prs_per_agent: 30
+
+mining:
+  # PRs are identified from the default branch's first-parent history (no GitHub API needed):
+  # "Merge pull request #N" (merge commit) or "... (#N)" (squash). before = M^1, after = M.
+  blob_limit: 1m            # partial clone: .py files above this size are counted as missing
+  shallow_margin_days: 200  # history kept before the first agent PR
+  clone_timeout_s: 1800
+  workers: 4
+  keep_clones: false
+  max_human_per_repo: 300   # random sample (seed + repo id) when a repo has more
+
+human_control:
+  # Human PRs merged within this many days of the repo's agent PRs.
+  window_days: 182
+  # Matched against "author name <email>" of the PR commit(s).
+  bot_author_patterns:
+    - "\\[bot\\]"
+    - "dependabot"
+    - "renovate"
+    - "github-actions"
+    - "pre-commit-ci"
+    - "(?i)copilot"
+    - "(?i)devin-ai"
+    - "(?i)cursor ?agent"
+    - "(?i)claude"
+    - "(?i)codex"
+    - "(?i)jules"
+  # Traces of agent assistance; matching PRs are excluded from the human group.
+  # Searched in the PR commit message(s), case-insensitive.
+  agent_trace_patterns:
+    - "co-authored-by: .*(claude|copilot|cursor|devin|codex|jules)"
+    - "generated with \\[?claude code"
+    - "chatgpt\\.com/codex"
+    - "devin run"
+    - "from \\S+/(copilot|codex|cursor|devin|jules|claude)[/_-]"
+
+graph:
+  # Package level = directory containing the module.
+  core_module_top_fraction: 0.10
+
+stats:
+  alpha: 0.05
+  p_adjust: holm
+
+manual_check:
+  sample_agent: 10
+  sample_human: 10
+
+paths:
+  raw: data/raw
+  interim: data/interim
+  processed: data/processed
+  repos: repos
+  tables: results/tables
+  figures: results/figures
+  manual_check: results/manual_check
+  logs: results/logs

@@ -1,0 +1,15 @@
+# secrets
+.env
+
+# environments and caches
+.venv/
+__pycache__/
+.pytest_cache/
+
+# large or re-downloadable data (see README: rerun scripts 01-03)
+data/raw/
+data/interim/
+repos/
+
+# run logs (summaries are kept in results/logs/runs.jsonl and *.csv)
+results/logs/*.log

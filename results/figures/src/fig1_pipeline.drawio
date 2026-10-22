@@ -1,0 +1,76 @@
+<mxfile host="drawio" version="32.4.1">
+  <diagram id="pipeline" name="Hình 1 – Quy trình">
+    <mxGraphModel dx="1000" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="520" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Row 1 -->
+        <mxCell id="s1" value="&lt;b&gt;(1) Dữ liệu AIDev-pop&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=15;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" value="Hugging Face, giấy phép CC-BY-4.0&lt;br&gt;Lọc: kho Python, không phải fork,&lt;br&gt;giấy phép mở, PR đã merge,&lt;br&gt;PR sửa mã nguồn .py, kho ≥ 3 PR agent" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=13;fontColor=#3A3A38;align=center;" vertex="1" parent="1">
+          <mxGeometry x="20" y="86" width="280" height="96" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s2" value="&lt;b&gt;(2) Khai thác kho mã (git)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=15;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="360" y="20" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" value="Clone nông (shallow), duyệt lịch sử&lt;br&gt;first-parent của nhánh chính.&lt;br&gt;Commit M đóng PR #N: &quot;Merge pull&lt;br&gt;request #N&quot; hoặc tiêu đề &quot;… (#N)&quot;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=13;fontColor=#3A3A38;" vertex="1" parent="1">
+          <mxGeometry x="360" y="86" width="280" height="96" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s3" value="&lt;b&gt;(3) Hai nhóm PR&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=15;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="700" y="20" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" value="&lt;b&gt;Agent:&lt;/b&gt; số PR có trong AIDev.&lt;br&gt;&lt;b&gt;Người:&lt;/b&gt; PR còn lại trong ±6 tháng,&lt;br&gt;loại bot và PR có dấu vết agent.&lt;br&gt;Cả hai: PR sửa mã nguồn .py" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=13;fontColor=#3A3A38;" vertex="1" parent="1">
+          <mxGeometry x="700" y="86" width="280" height="96" as="geometry" />
+        </mxCell>
+
+        <!-- Row 2 -->
+        <mxCell id="s4" value="&lt;b&gt;(4) Đồ thị phụ thuộc&lt;br&gt;trước (M^1) và sau (M)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=15;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="20" y="270" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" value="Phân tích lệnh import bằng ast;&lt;br&gt;chỉ giữ module nội bộ;&lt;br&gt;đồ thị mức file và mức package" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=13;fontColor=#3A3A38;" vertex="1" parent="1">
+          <mxGeometry x="20" y="336" width="280" height="96" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s5" value="&lt;b&gt;(5) Chỉ số xói mòn (sau − trước)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=15;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="360" y="270" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="d5" value="Cạnh phụ thuộc mới; chu trình mới&lt;br&gt;(thành phần liên thông mạnh);&lt;br&gt;Δ Ce, Δ I = Ce/(Ca+Ce);&lt;br&gt;vi phạm phân tầng" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=13;fontColor=#3A3A38;" vertex="1" parent="1">
+          <mxGeometry x="360" y="336" width="280" height="96" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s6" value="&lt;b&gt;(6) Phân tích thống kê&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=15;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="700" y="270" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="d6" value="Mann–Whitney U, Cliff's δ, Fisher;&lt;br&gt;Kruskal–Wallis, Dunn; hiệu chỉnh Holm;&lt;br&gt;kiểm tra độ vững: theo quy mô PR,&lt;br&gt;theo cặp kho, bỏ kho lớn nhất" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=13;fontColor=#3A3A38;" vertex="1" parent="1">
+          <mxGeometry x="700" y="336" width="280" height="96" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows -->
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;" edge="1" parent="1" source="s1" target="s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;" edge="1" parent="1" source="s2" target="s3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="d3" target="s4">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="840" y="226" />
+              <mxPoint x="160" y="226" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e45" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;" edge="1" parent="1" source="s4" target="s5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e56" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;" edge="1" parent="1" source="s5" target="s6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

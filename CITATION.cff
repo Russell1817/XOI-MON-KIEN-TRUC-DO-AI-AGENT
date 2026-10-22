@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software or data, please cite it as below."
+title: "Architecture erosion introduced by AI coding agent pull requests: an empirical study on the AIDev dataset (code and data)"
+authors:
+  - family-names: "Võ"
+    given-names: "Hoàng Anh"
+    affiliation: "Ho Chi Minh City University of Foreign Languages – Information Technology (HUFLIT)"
+repository-code: "https://github.com/Russell1817/XOI-MON-KIEN-TRUC-DO-AI-AGENT"
+license: MIT
+date-released: "2026-10-22"
