@@ -163,8 +163,15 @@ def main() -> int:
           "Q4_EDGES_DELTA": d(q4.loc["added_edges", "cliffs_delta"], 3), "Q4_EDGES_P": p(q4.loc["added_edges", "p_holm"]),
           "Q4_CYC_A": pct(q4.loc["new_cycle (rate)", "rate_agent"], 1), "Q4_CYC_H": pct(q4.loc["new_cycle (rate)", "rate_human"], 1),
           "Q4_CYC_P": p(q4.loc["new_cycle (rate)", "p_holm"])}
-    low = strata[(strata["stratum"] != "Q4")]
-    v["Q123_MIN_P"] = p(low["p_holm"].min())
+    q3 = strata[strata["stratum"] == "Q3"].set_index("metric")
+    v |= {"Q3_RANGE": rng(q3.loc["added_edges", "loc_range"]),
+          "Q3_EDGES_A": pct(q3.loc["added_edges", "share_pos_agent"]), "Q3_EDGES_H": pct(q3.loc["added_edges", "share_pos_human"]),
+          "Q3_EDGES_DELTA": d(q3.loc["added_edges", "cliffs_delta"], 3), "Q3_EDGES_P": p(q3.loc["added_edges", "p_holm"]),
+          "Q3_CYC_P": p(q3.loc["new_cycle (rate)", "p_holm"])}
+    low = strata[strata["stratum"].isin(["Q1", "Q2"])]
+    v["Q12_MIN_P"] = p(low["p_holm"].min())
+    cyc_strata = strata[strata["metric"] == "new_cycle (rate)"]
+    v["STRATA_CYC_MIN_P"] = p(cyc_strata["p_holm"].min())
 
     for m, key in (("added_edges", "EDGES"), ("edges_per_file", "EPF"), ("new_cycle", "CYC")):
         r = paired.loc[m]
@@ -212,10 +219,11 @@ def main() -> int:
         dunn = pd.DataFrame(s["dunn_holm"]["edges_per_100_loc"])
         others = [a for a in dunn.columns if a != "Claude_Code"]
         sig = [AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] < 0.05]
-        v["CC_E100_SIG_VS"] = ", ".join(sig) if sig else "không agent nào"
-        v["CC_E100_NS_VS"] = ", ".join(AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] >= 0.05) or "không agent nào"
+        vi_list = lambda xs: ", ".join(xs[:-1]) + " và " + xs[-1] if len(xs) > 1 else "".join(xs)
+        v["CC_E100_SIG_VS"] = vi_list(sig) if sig else "không agent nào"
+        v["CC_E100_NS_VS"] = vi_list([AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] >= 0.05]) or "không agent nào"
         ns = [AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] >= 0.05]
-        v["CC_E100_CLAUSE"] = (f"khác {v['CC_E100_SIG_VS']}, nhưng không khác {', '.join(ns)}" if ns and sig
+        v["CC_E100_CLAUSE"] = (f"khác {v['CC_E100_SIG_VS']}, nhưng không khác {vi_list(ns)}" if ns and sig
                                else "khác tất cả các agent còn lại" if sig else "không khác agent nào")
 
     v |= {"MANUAL_N": n(len(manual)), "MANUAL_MATCH": n((manual["match"] == "yes").sum())}
@@ -223,9 +231,14 @@ def main() -> int:
     # Figure 6 (ECDF of added edges among PRs that add edges), on the analysis sample.
     both = ok.groupby("repo")["group"].agg(set)
     sample = ok[ok["repo"].isin(both[both.apply(lambda g: {"agent", "human"} <= g)].index)]
+    # Repositories with measured agent PRs but no eligible human PR drop out of the comparison.
+    lost = ok[ok["repo"].isin(both[both.apply(lambda g: "human" not in g)].index) & (ok["group"] == "agent")]["repo"].value_counts()
+    v |= {"NOHUMAN_REPOS": n(len(lost)), "NOHUMAN_AGENT_PRS": n(lost.sum()),
+          "NOHUMAN_TOP_REPO": lost.index[0] if len(lost) else "", "NOHUMAN_TOP_PRS": n(lost.iloc[0]) if len(lost) else "0"}
     pos = sample[sample["added_edges"] > 0]
     pos_a, pos_h = pos[pos["group"] == "agent"]["added_edges"], pos[pos["group"] == "human"]["added_edges"]
     v |= {"ECDF_MED_A": d(pos_a.median(), 0), "ECDF_MED_H": d(pos_h.median(), 0),
+          "ECDF_P90_A": d(pos_a.quantile(0.9), 0), "ECDF_P90_H": d(pos_h.quantile(0.9), 0),
           "ECDF_MAX_A": n(pos_a.max()), "ECDF_MAX_H": n(pos_h.max())}
     # English-formatted variants for the English abstract (decimal point, comma thousands separator).
     import re as _re
@@ -247,27 +260,38 @@ def main() -> int:
             and rq1.loc["added_edges", "p_holm"] < alpha,
         "RQ1: agent PRs create a new cycle less often than human PRs, significant after Holm":
             c["rate_agent"] < c["rate_human"] and c["p_holm"] < alpha,
-        "RQ1: Δ Ce and Δ I of core packages not significant after Holm":
-            rq1.loc["d_ce_mean", "p_holm"] >= alpha and rq1.loc["d_i_core", "p_holm"] >= alpha,
+        "RQ1: Δ Ce significant after Holm with a negligible effect; Δ I of core packages not significant":
+            rq1.loc["d_ce_mean", "p_holm"] < alpha and abs(rq1.loc["d_ce_mean", "cliffs_delta"]) < 0.147
+            and rq1.loc["d_i_core", "p_holm"] >= alpha,
         "RQ1: every |Cliff's δ| in Table 4 is below 0.07":
             bool((rq1.loc[list(labels), "cliffs_delta"].abs() < 0.07).all()),
-        "Size strata: no significant difference in Q1-Q3 (both metrics)":
+        "Size strata: no significant difference in Q1-Q2 (both metrics)":
             bool((low["p_holm"] >= alpha).all()),
+        "Size strata: Q3 added-edge share lower for agents and significant":
+            q3.loc["added_edges", "share_pos_agent"] < q3.loc["added_edges", "share_pos_human"]
+            and q3.loc["added_edges", "p_holm"] < alpha,
+        "Size strata: new-cycle rate lower for agents in Q2-Q4 but not significant in any stratum after Holm":
+            bool((cyc_strata["p_holm"] >= alpha).all())
+            and bool((cyc_strata[cyc_strata["stratum"] != "Q1"]["rate_agent"] < cyc_strata[cyc_strata["stratum"] != "Q1"]["rate_human"]).all()),
         "Size strata: Q4 new-cycle rate far above Q1 in both groups (\"PR lớn ... cao hơn hẳn PR nhỏ\")":
             bool(q4.loc["new_cycle (rate)", "rate_agent"] > 5 * strata[(strata["stratum"] == "Q1") & (strata["metric"] == "new_cycle (rate)")]["rate_agent"].iloc[0]
                  and q4.loc["new_cycle (rate)", "rate_human"] > 5 * strata[(strata["stratum"] == "Q1") & (strata["metric"] == "new_cycle (rate)")]["rate_human"].iloc[0]),
-        "Data: agent PRs smaller than human PRs (median LOC)": t1.loc["agent", "median_loc"] < t1.loc["human", "median_loc"],
+        "Data: close to half of measured agent PRs are in repositories without human PRs (\"Gần một nửa\")":
+            0.4 <= lost.sum() / (ok["group"] == "agent").sum() < 0.5,
+        "Data: agent PRs larger than human PRs (median LOC)": t1.loc["agent", "median_loc"] > t1.loc["human", "median_loc"],
         "Size strata: Q4 added-edge share lower for agents and significant":
             q4.loc["added_edges", "share_pos_agent"] < q4.loc["added_edges", "share_pos_human"]
             and q4.loc["added_edges", "p_holm"] < alpha,
         "Repo-paired: humans higher in more repositories for added edges, significant":
             paired.loc["added_edges", "human_higher"] > paired.loc["added_edges", "agent_higher"]
             and paired.loc["added_edges", "p"] < alpha,
-        "Repo-paired: new-cycle difference not significant":
-            not (paired.loc["new_cycle", "p"] < alpha),
+        "Repo-paired: humans higher in more repositories for new cycles, significant":
+            paired.loc["new_cycle", "human_higher"] > paired.loc["new_cycle", "agent_higher"]
+            and paired.loc["new_cycle", "p"] < alpha,
         "Without largest repo: agents still add edges less often":
             nl_e["share_pos_agent"] < nl_e["share_pos_human"],
-        "Fig 6: median added edges (PRs with edges) lower for agents": pos_a.median() < pos_h.median(),
+        "Fig 6: equal medians, shorter agent tail (90th percentile lower)":
+            pos_a.median() == pos_h.median() and pos_a.quantile(0.9) < pos_h.quantile(0.9),
         "Fig 6: agent ECDF lies on or above the human ECDF for most values (agent stochastically smaller)":
             sum((pos_a <= x).mean() >= (pos_h <= x).mean() for x in range(1, 101)) >= 90,
         "Fig 6: PRs with more than 100 new edges occur only in the human group":

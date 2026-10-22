@@ -13,6 +13,7 @@ repos/
 
 # run logs (summaries are kept in results/logs/runs.jsonl and *.csv)
 results/logs/*.log
+results/logs/*.txt
 
 # research outputs: kept locally, published together with the paper
 data/processed/
