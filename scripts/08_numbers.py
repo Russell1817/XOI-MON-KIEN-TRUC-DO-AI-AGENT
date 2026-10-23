@@ -140,7 +140,7 @@ def main() -> int:
                 ("cycle_new_pkgs", "% PR đưa package mới vào chu trình"),
                 ("cycle_existing_only", "% PR chỉ thêm cạnh trong chu trình có sẵn"),
                 ("d_ce_mean", "Δ Ce: TB"), ("d_i_core", "Δ I package lõi: TB")]
-    rows = ["| Chỉ số | Agent | Người | Hiệu ứng | p (Holm) |", "|---|---|---|---|---|"]
+    rows = ["| Chỉ số | Agent | Người | Hiệu ứng | *p* (Holm) |", "|---|---|---|---|---|"]
     for m, lab in rq1_rows:
         r = rq1.loc[m]
         if r["kind"] == "rate":
@@ -173,7 +173,7 @@ def main() -> int:
     v |= {"CYC_TOTAL": n(cyc["k_agent"] + cyc["k_human"]), "CNP_TOTAL": n(cnp["k_agent"] + cnp["k_human"]),
           "CNP_SHARE_OF_CYC": pct((cnp["k_agent"] + cnp["k_human"]) / (cyc["k_agent"] + cyc["k_human"]), 0)}
 
-    rows = ["| Nhóm quy mô (số dòng) | Chỉ số | Agent | Người | OR | p (Holm) |", "|---|---|---|---|---|---|"]
+    rows = ["| Nhóm quy mô (số dòng) | Chỉ số | Agent | Người | OR | *p* (Holm) |", "|---|---|---|---|---|---|"]
     for _, r in strata.iterrows():
         first = r["metric"] == "adds_edge"
         q = f"{r['stratum']} ({rng(r['loc_range'])})" if first else ""
@@ -215,7 +215,7 @@ def main() -> int:
 
     vlab = {"runtime (main)": "Chính: bỏ import trong TYPE_CHECKING", "all imports": "Mọi import",
             "module level only": "Chỉ import ở mức module"}
-    rows = ["| Đồ thị | % PR thêm cạnh (agent; người) | OR (p) | % PR đưa package mới vào chu trình (agent; người) | OR (p) |",
+    rows = ["| Đồ thị | % PR thêm cạnh (agent; người) | OR (*p*) | % PR đưa package mới vào chu trình (agent; người) | OR (*p*) |",
             "|---|---|---|---|---|"]
     for var, g in variants.groupby("variant", sort=False):
         e, c2 = g.set_index("metric").loc["adds_edge"], g.set_index("metric").loc["cycle_new_pkgs"]
@@ -235,7 +235,7 @@ def main() -> int:
     tlab = {"agent_pr": "PR của agent", "log_loc": "log(1 + số dòng thay đổi)", "log_files": "log(1 + số file thay đổi)",
             "merge_commit": "Kiểu merge commit", "years": "Thời điểm merge (năm)",
             "log_modules": "log(1 + số module trước PR)", "log_pkgs_touched": "log(1 + số package PR sửa)"}
-    rows = ["| Biến | Thêm ≥ 1 cạnh: OR [KTC 95%] | p | Đưa package mới vào chu trình: OR [KTC 95%] | p |",
+    rows = ["| Biến | Thêm ≥ 1 cạnh: OR [KTC 95%] | *p* | Đưa package mới vào chu trình: OR [KTC 95%] | *p* |",
             "|---|---|---|---|---|"]
     m2 = reg[reg["model"] == "model1"]  # table: model 1 (model 2 adds the spread, collinear with files changed)
     for term, lab in tlab.items():

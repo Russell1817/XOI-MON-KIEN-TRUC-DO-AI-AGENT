@@ -6,7 +6,7 @@
         <mxCell id="1" parent="0" />
 
         <!-- Panel titles -->
-        <mxCell id="t1" value="&lt;b&gt;(a) Trước PR (commit M^1)&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=18;fontColor=#0B0B0B;" vertex="1" parent="1">
+        <mxCell id="t1" value="&lt;b&gt;(a) Trước PR (commit M′)&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=18;fontColor=#0B0B0B;" vertex="1" parent="1">
           <mxGeometry x="40" y="10" width="400" height="30" as="geometry" />
         </mxCell>
         <mxCell id="t2" value="&lt;b&gt;(b) Sau PR (commit M)&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=18;fontColor=#0B0B0B;" vertex="1" parent="1">
@@ -76,7 +76,7 @@
         <mxCell id="c1" value="Không có chu trình giữa các package&lt;br&gt;Mọi cạnh đi từ tầng trên xuống tầng dưới" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=16;fontColor=#3A3A38;" vertex="1" parent="1">
           <mxGeometry x="90" y="320" width="420" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="c2" value="Cạnh package mới = 1&lt;br&gt;C_new = 1: 3 package vào cùng một SCC&lt;br&gt;Vi phạm phân tầng = 1 (dữ liệu → giao diện)" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=16;fontColor=#3A3A38;" vertex="1" parent="1">
+        <mxCell id="c2" value="Cạnh package mới = 1&lt;br&gt;C&lt;sub&gt;new&lt;/sub&gt; = 1: 3 package vào cùng một SCC&lt;br&gt;Vi phạm phân tầng = 1 (dữ liệu → giao diện)" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=16;fontColor=#3A3A38;" vertex="1" parent="1">
           <mxGeometry x="530" y="320" width="440" height="80" as="geometry" />
         </mxCell>
       </root>

@@ -28,7 +28,7 @@
         </mxCell>
 
         <!-- Row 2 -->
-        <mxCell id="s4" value="&lt;b&gt;(4) Đồ thị phụ thuộc&lt;br&gt;trước (M^1) và sau (M)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+        <mxCell id="s4" value="&lt;b&gt;(4) Đồ thị phụ thuộc&lt;br&gt;trước (M′) và sau (M)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
           <mxGeometry x="0" y="290" width="305" height="56" as="geometry" />
         </mxCell>
         <mxCell id="d4" value="Phân tích lệnh import bằng ast;&lt;br&gt;chỉ giữ module nội bộ;&lt;br&gt;đồ thị mức file và mức package" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52514E;dashed=1;fontFamily=Arial;fontSize=16;fontColor=#3A3A38;" vertex="1" parent="1">
