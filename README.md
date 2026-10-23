@@ -44,13 +44,16 @@ will be added to this repository when the paper is published.
 4. **Dependency graph.** Every Python source file (tests, docs, examples and `setup.py` excluded) is parsed with
    `ast`; each import is resolved to the longest matching internal module (relative imports, `src/` layouts,
    sub-directory roots). Renamed files are detected with `git diff -M` so that moving a file is not counted as
-   new dependencies. Graphs are built at file and package (directory) level.
-5. **Metrics (after − before).** New file-level edges, new package edges, new package cycles (strongly
-   connected components), Δ Ce, Δ Instability of the core packages, and new layering violations
+   new dependencies. Each import is tagged by where it sits (module level, inside a function, under
+   `if TYPE_CHECKING:`); the main graph leaves out type-checking-only imports, and two variants (all imports,
+   module-level imports only) are kept for sensitivity analysis. Graphs are built at file and package (directory) level.
+5. **Metrics (after − before).** New file-level edges, new package edges, packages brought into a
+   dependency cycle (strongly connected components) versus edges added inside existing cycles, Δ Ce, Δ Instability of the core packages, and new layering violations
    (import-linter `layers` contracts when present, otherwise a conservative directory-name heuristic).
 6. **Statistics.** Mann–Whitney U with Cliff's δ, Fisher's exact test, Kruskal–Wallis with Dunn's post-hoc test,
-   Holm correction, α = 0.05. Robustness: comparison within PR-size quartiles, repository-paired Wilcoxon test,
-   and re-analysis without the repository with the most agent PRs.
+   Holm correction, α = 0.05; logistic GEE with PRs clustered by repository. Robustness: comparison within PR-size
+   quartiles, repository-paired Wilcoxon test, re-analysis without the repository with the most agent PRs and
+   without OpenAI Codex, alternative graphs, and a correction for agent PRs hidden in the human group.
 
 ## Requirements
 
@@ -65,14 +68,15 @@ will be added to this repository when the paper is published.
 uv python install 3.12
 uv sync
 uv run python scripts/00_check_env.py        # environment report
-uv run pytest -q                             # 16 unit tests
+uv run pytest -q                             # 18 unit tests
 
 uv run python scripts/01_download_aidev.py   # ~1.4 GB, pinned dataset revision
 uv run python scripts/02_filter_agent_prs.py
 uv run python scripts/03_mine_repos.py --workers 8   # several hours; resumable
 uv run python scripts/04_layer_violations.py
-uv run python scripts/05_manual_check.py     # draws the validation sample (frozen once reviewed)
+uv run python scripts/05_manual_check.py     # draws the two-reviewer validation sample (kept unless --resample)
 uv run python scripts/05b_review_violations.py
+uv run python scripts/05c_screen_human_prs.py # screens human PRs for agent traces on github.com
 uv run python scripts/06_statistics.py
 uv run python scripts/07_figures.py
 uv run python scripts/08_numbers.py          # numbers.json and claims.json
@@ -83,9 +87,11 @@ Useful options: `--repos owner/name ...` to mine selected repositories, `--retry
 repositories that failed for transient reasons (network, machine sleep), `--limit N` for a trial run.
 Repositories deleted from GitHub are reported and excluded.
 
-`05_manual_check.py` and `05b_review_violations.py` prepare files for **manual** review: the reviewer reads
-each diff or source file on GitHub and fills the `match` / `verdict` and `note` / `reason` columns. A reviewed
-sample is kept as is unless `--resample` is passed; review verdicts are kept for edges flagged again.
+`05_manual_check.py` and `05b_review_violations.py` prepare files for **manual** review: two reviewers read
+each diff or source file on GitHub and fill their own `rater1_*` / `rater2_*` columns, then agree on
+`consensus_match` (step 08 reports Cohen's kappa); flagged layering edges get a `verdict` and `reason`.
+A sample is kept unless `--resample` is passed; review verdicts are kept for edges flagged again.
+`05c_screen_human_prs.py` estimates how many "human" PRs were made with an agent.
 
 ## Pipeline
 
@@ -96,11 +102,12 @@ sample is kept as is unless `--resample` is passed; review verdicts are kept for
 | 02 | `02_filter_agent_prs.py` | `data/interim/agent_prs.csv`, `results/logs/filter_funnel.csv` |
 | 03 | `03_mine_repos.py` | `data/interim/mined/`, `data/interim/mined_prs.csv`, `results/logs/mining_repos.csv` |
 | 04 | `04_layer_violations.py` | `data/processed/pr_metrics.csv`, `data/processed/violations.jsonl`, `config/layer_rules/*.json` |
-| 05 | `05_manual_check.py` | `results/manual_check/manual_check.csv`, `manual_check_details.json` |
+| 05 | `05_manual_check.py` | `results/manual_check/manual_check_team.csv`, `manual_check_team_details.json` |
 | 05b | `05b_review_violations.py` | `results/manual_check/violations_review.csv` |
-| 06 | `06_statistics.py` | `results/tables/*.csv`, `stats_summary.json` |
+| 05c | `05c_screen_human_prs.py` | `results/manual_check/human_screen.csv` |
+| 06 | `06_statistics.py` | `results/tables/*.csv` (incl. GEE regression, sensitivity), `stats_summary.json` |
 | 07 | `07_figures.py` | `results/figures/fig3`–`fig7` (PNG 300 dpi and SVG) |
-| 08 | `08_numbers.py` | `results/tables/numbers.json`, `claims.json` |
+| 08 | `08_numbers.py` | `results/tables/numbers.json`, `claims.json`, `pending.json` |
 
 Every script appends a record (code commit, time, parameters, outputs) to `results/logs/runs.jsonl`.
 All thresholds, seeds and paths are in `config/settings.yaml`.
@@ -116,7 +123,9 @@ One row per PR. Key columns:
 | `status` | `ok`, `not_on_first_parent`, `no_py_source_change` or `error` |
 | `loc_changed`, `files_changed`, `py_files_changed` | PR size |
 | `added_edges`, `removed_edges`, `edges_per_file`, `added_pkg_edges` | dependency changes |
-| `new_cycle`, `d_cyclic_pkgs`, `d_cyclic_modules` | cycle changes |
+| `cycle_new_pkgs`, `cycle_existing_only`, `new_cycle`, `d_cyclic_pkgs`, `d_cyclic_modules` | cycle changes |
+| `added_edges_all`, `added_edges_top`, `cycle_new_pkgs_all`, … | the same indicators on the alternative graphs |
+| `pkgs_touched` | packages whose source files the PR changes |
 | `d_ce_mean`, `d_i_core` | coupling and instability changes |
 | `new_violations`, `has_violation`, `rq2_eligible`, `layer_source` | layering |
 | `renamed_py`, `rename_detection`, `missing_blobs`, `parse_errors` | data-quality flags |

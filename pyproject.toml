@@ -12,6 +12,7 @@ dependencies = [
     "networkx",
     "scipy",
     "scikit-posthocs",
+    "statsmodels",
     "matplotlib",
     "requests",
     "pyyaml",

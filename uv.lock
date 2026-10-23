@@ -23,6 +23,7 @@ dependencies = [
     { name = "requests" },
     { name = "scikit-posthocs" },
     { name = "scipy" },
+    { name = "statsmodels" },
 ]
 
 [package.dev-dependencies]
@@ -44,6 +45,7 @@ requires-dist = [
     { name = "requests" },
     { name = "scikit-posthocs" },
     { name = "scipy" },
+    { name = "statsmodels" },
 ]
 
 [package.metadata.requires-dev]

@@ -106,11 +106,12 @@ def rates_by_group(d: pd.DataFrame) -> None:
     e = e[e["repo"].isin(groups[groups.apply(lambda s: {"agent", "human"} <= s)].index)]
     rows = (_rate_rows(d, "adds_edge", "Thêm ≥1 cạnh\nphụ thuộc (file)")
             + _rate_rows(d, "adds_pkg_edge", "Thêm ≥1 cạnh\ngiữa package")
-            + _rate_rows(d, "new_cycle", "Tạo chu trình\nmới (package)")
+            + _rate_rows(d, "cycle_new_pkgs", "Đưa package mới\nvào chu trình")
+            + _rate_rows(d, "cycle_existing_only", "Chỉ thêm cạnh trong\nchu trình có sẵn")
             + _rate_rows(e, "has_violation", "Có vi phạm\nphân tầng (RQ2)"))
     r = pd.DataFrame(rows)
     labels = list(dict.fromkeys(r["metric"]))
-    fig, ax = plt.subplots(figsize=(6.4, 3.0))
+    fig, ax = plt.subplots(figsize=(6.4, 3.6))
     for j, grp in enumerate(("agent", "human")):
         color, marker, name = STYLE[grp]
         s = r[r["group"] == grp]
@@ -133,7 +134,7 @@ def size_strata(d: pd.DataFrame) -> None:
     s["size_q"] = pd.qcut(s["loc_changed"], 4, labels=["Q1", "Q2", "Q3", "Q4"])
     bounds = s.groupby("size_q", observed=True)["loc_changed"].agg(["min", "max"])
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.8), sharex=True)
-    for ax, (col, title) in zip(axes, [("added_edges", "Thêm ≥1 cạnh phụ thuộc"), ("new_cycle", "Tạo chu trình mới")]):
+    for ax, (col, title) in zip(axes, [("added_edges", "Thêm ≥1 cạnh phụ thuộc"), ("cycle_new_pkgs", "Đưa package mới vào chu trình")]):
         for j, grp in enumerate(("agent", "human")):
             color, marker, name = STYLE[grp]
             pts = []
@@ -159,11 +160,11 @@ def per_agent() -> None:
     t = pd.read_csv(path("tables") / "table3_rq3.csv").sort_values("prs", ascending=True)
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 0.5 + 0.45 * len(t)), sharey=True)
     for ax, (k_col, title) in zip(axes, [("share_added_edges", "Thêm ≥1 cạnh phụ thuộc"),
-                                          ("new_cycle_rate", "Tạo chu trình mới")]):
+                                          ("cycle_new_pkgs_rate", "Đưa package mới vào chu trình")]):
         if k_col == "share_added_edges":
             ks = (t["share_added_edges"] * t["prs"]).round().astype(int)
         else:
-            ks = t["new_cycle_k"]
+            ks = t["cycle_new_pkgs_k"]
         ci = [wilson(int(k), int(n)) for k, n in zip(ks, t["prs"])]
         rate = ks / t["prs"] * 100
         ax.errorbar(rate, range(len(t)), xerr=[rate - [c[0] * 100 for c in ci], [c[1] * 100 for c in ci] - rate],

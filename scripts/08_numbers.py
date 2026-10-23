@@ -62,14 +62,19 @@ def main() -> int:
     rq1 = pd.read_csv(t / "table2_rq1.csv").set_index("metric")
     strata = pd.read_csv(t / "robust_size_strata.csv")
     paired = pd.read_csv(t / "robust_repo_paired.csv").set_index("metric")
-    nolarge = pd.read_csv(t / "robust_without_largest_repo.csv").set_index("metric")
+    subs = pd.read_csv(t / "robust_subsets.csv")
+    variants = pd.read_csv(t / "robust_graph_variants.csv")
+    reg = pd.read_csv(t / "regression_gee.csv")
+    spread = pd.read_csv(t / "spread_pkgs_touched.csv")
+    selection = pd.read_csv(t / "selection_agent_prs.csv")
     rq2 = pd.read_csv(t / "table_rq2.csv").set_index("metric")
     rq3 = pd.read_csv(t / "table3_rq3.csv")
     funnel = pd.read_csv(path("logs") / "filter_funnel.csv")
     mining = pd.read_csv(path("logs") / "mining_repos.csv")
     metrics = pd.read_csv(path("processed") / "pr_metrics.csv", low_memory=False)
-    manual_file = path("manual_check") / "manual_check.csv"
-    manual = pd.read_csv(manual_file) if manual_file.exists() else pd.DataFrame(columns=["match"])
+    manual_file = path("manual_check") / "manual_check_team.csv"
+    manual = (pd.read_csv(manual_file, dtype=str, keep_default_na=False) if manual_file.exists()
+              else pd.DataFrame(columns=["rater1_match", "rater2_match", "consensus_match"]))
     review_file = path("manual_check") / "violations_review.csv"
     review = pd.read_csv(review_file) if review_file.exists() and review_file.stat().st_size > 2 else pd.DataFrame()
     if len(review):
@@ -125,65 +130,165 @@ def main() -> int:
         v[f"T1_{key}_PYFILES"], v[f"T1_{key}_MODULES"] = d(r["median_py_files"], 0), d(r["median_modules_before"], 0)
         v[f"T1_{key}_MERGE"] = pct(r["share_merge_commit"])
 
-    labels = {"added_edges": "Cạnh mới", "edges_per_file": "Cạnh mới / file", "added_pkg_edges": "Cạnh package mới",
-              "d_cyclic_pkgs": "Δ package trong chu trình", "d_ce_mean": "Δ Ce", "d_i_core": "Δ I package lõi"}
-    rows = ["| Chỉ số | Agent: TB (% PR > 0) | Người: TB (% PR > 0) | Cliff's δ | p (Holm) |", "|---|---|---|---|---|"]
-    for m, lab in labels.items():
-        r = rq1.loc[m]
-        rows.append(f"| {lab} | {d(r['mean_agent'], 3)} ({pct(r['share_pos_agent'])}) | "
-                    f"{d(r['mean_human'], 3)} ({pct(r['share_pos_human'])}) | {d(r['cliffs_delta'], 3)} | {pt(r['p_holm'])} |")
-    c = rq1.loc["new_cycle (rate)"]
-    rows.append(f"| Chu trình mới (tỷ lệ PR) | {pct(c['rate_agent'], 2)} ({n(c['k_agent'])}/{n(c['n_agent'])}) | "
-                f"{pct(c['rate_human'], 2)} ({n(c['k_human'])}/{n(c['n_human'])}) | OR = {d(c['odds_ratio'])} | {pt(c['p_holm'])} |")
-    v["TABLE_RQ1"] = "\n".join(rows)
-    for m, key in (("added_edges", "EDGES"), ("edges_per_file", "EPF"), ("d_cyclic_pkgs", "DCYC"),
-                   ("d_ce_mean", "DCE"), ("d_i_core", "DI"), ("added_pkg_edges", "PKGE")):
-        r = rq1.loc[m]
-        v |= {f"RQ1_{key}_A": d(r["mean_agent"], 2), f"RQ1_{key}_H": d(r["mean_human"], 2),
-              f"RQ1_{key}_POS_A": pct(r["share_pos_agent"]), f"RQ1_{key}_POS_H": pct(r["share_pos_human"]),
-              f"RQ1_{key}_DELTA": d(r["cliffs_delta"], 3), f"RQ1_{key}_P": p(r["p_holm"])}
-    v |= {"RQ1_CYC_A": pct(c["rate_agent"], 2), "RQ1_CYC_H": pct(c["rate_human"], 2),
-          "RQ1_CYC_KA": n(c["k_agent"]), "RQ1_CYC_KH": n(c["k_human"]), "RQ1_CYC_OR": d(c["odds_ratio"]),
-          "RQ1_CYC_P": p(c["p_holm"])}
-    e100 = rq1.loc["edges_per_100_loc"]
-    v |= {"E100_A": d(e100["mean_agent"], 2), "E100_H": d(e100["mean_human"], 2), "E100_DELTA": d(e100["cliffs_delta"], 3),
-          "E100_P": p(e100["p"])}
+    # RQ1 table: how often a PR adds structure (share of PRs, Fisher, odds ratio) and how much it adds
+    # when it does (Mann-Whitney U, Cliff's delta).
+    def k_of(r):
+        return 2 if r["rate_human"] < 0.1 else 1
 
-    rows = ["| Nhóm quy mô (số dòng) | Chỉ số | Agent | Người | Hiệu ứng | p (Holm) |", "|---|---|---|---|---|---|"]
-    for _, r in strata.iterrows():
-        if r["metric"] == "added_edges":
-            rows.append(f"| {r['stratum']} ({rng(r['loc_range'])}) | % PR thêm cạnh | {pct(r['share_pos_agent'])} "
-                        f"(n = {n(r['n_agent'])}) | {pct(r['share_pos_human'])} (n = {n(r['n_human'])}) | "
-                        f"δ = {d(r['cliffs_delta'], 3)} | {pt(r['p_holm'])} |")
+    rq1_rows = [("adds_edge", "% PR thêm ≥ 1 cạnh"), ("edges_if_any", "Số cạnh mới khi có thêm: trung vị; TB"),
+                ("adds_pkg_edge", "% PR thêm ≥ 1 cạnh package"),
+                ("cycle_new_pkgs", "% PR đưa package mới vào chu trình"),
+                ("cycle_existing_only", "% PR chỉ thêm cạnh trong chu trình có sẵn"),
+                ("d_ce_mean", "Δ Ce: TB"), ("d_i_core", "Δ I package lõi: TB")]
+    rows = ["| Chỉ số | Agent | Người | Hiệu ứng | p (Holm) |", "|---|---|---|---|---|"]
+    for m, lab in rq1_rows:
+        r = rq1.loc[m]
+        if r["kind"] == "rate":
+            ca = f"{pct(r['rate_agent'], k_of(r))} ({n(r['k_agent'])}/{n(r['n_agent'])})"
+            ch = f"{pct(r['rate_human'], k_of(r))} ({n(r['k_human'])}/{n(r['n_human'])})"
+            eff = f"OR = {d(r['odds_ratio'])}"
+        elif r["kind"] == "positive":
+            ca = f"{d(r['median_agent'], 0)}; {d(r['mean_agent'], 2)}"
+            ch = f"{d(r['median_human'], 0)}; {d(r['mean_human'], 2)}"
+            eff = f"δ = {d(r['cliffs_delta'], 3)}"
         else:
-            rows.append(f"| | % PR tạo chu trình | {pct(r['rate_agent'], 2)} | {pct(r['rate_human'], 2)} | "
-                        f"OR = {d(r['odds_ratio'])} | {pt(r['p_holm'])} |")
-    v["TABLE_STRATA"] = "\n".join(rows)
-    q4 = strata[strata["stratum"] == "Q4"].set_index("metric")
-    v |= {"Q4_RANGE": rng(q4.loc["added_edges", "loc_range"]),
-          "Q4_EDGES_A": pct(q4.loc["added_edges", "share_pos_agent"]), "Q4_EDGES_H": pct(q4.loc["added_edges", "share_pos_human"]),
-          "Q4_EDGES_DELTA": d(q4.loc["added_edges", "cliffs_delta"], 3), "Q4_EDGES_P": p(q4.loc["added_edges", "p_holm"]),
-          "Q4_CYC_A": pct(q4.loc["new_cycle (rate)", "rate_agent"], 1), "Q4_CYC_H": pct(q4.loc["new_cycle (rate)", "rate_human"], 1),
-          "Q4_CYC_P": p(q4.loc["new_cycle (rate)", "p_holm"])}
-    q3 = strata[strata["stratum"] == "Q3"].set_index("metric")
-    v |= {"Q3_RANGE": rng(q3.loc["added_edges", "loc_range"]),
-          "Q3_EDGES_A": pct(q3.loc["added_edges", "share_pos_agent"]), "Q3_EDGES_H": pct(q3.loc["added_edges", "share_pos_human"]),
-          "Q3_EDGES_DELTA": d(q3.loc["added_edges", "cliffs_delta"], 3), "Q3_EDGES_P": p(q3.loc["added_edges", "p_holm"]),
-          "Q3_CYC_P": p(q3.loc["new_cycle (rate)", "p_holm"])}
-    low = strata[strata["stratum"].isin(["Q1", "Q2"])]
-    v["Q12_MIN_P"] = p(low["p_holm"].min())
-    cyc_strata = strata[strata["metric"] == "new_cycle (rate)"]
-    v["STRATA_CYC_MIN_P"] = p(cyc_strata["p_holm"].min())
+            ca, ch, eff = d(r["mean_agent"], 3), d(r["mean_human"], 3), f"δ = {d(r['cliffs_delta'], 3)}"
+        rows.append(f"| {lab} | {ca} | {ch} | {eff} | {pt(r['p_holm'])} |")
+    v["TABLE_RQ1"] = "\n".join(rows)
+    v["RQ1_FAMILY_N"] = n(len(s["rq1_holm_family"]))
+    for m, key in (("adds_edge", "EDGES"), ("adds_pkg_edge", "PKGE"), ("cycle_new_pkgs", "CNP"),
+                   ("cycle_existing_only", "CEX"), ("new_cycle", "CYC")):
+        r = rq1.loc[m]
+        v |= {f"RQ1_{key}_A": pct(r["rate_agent"], k_of(r)), f"RQ1_{key}_H": pct(r["rate_human"], k_of(r)),
+              f"RQ1_{key}_KA": n(r["k_agent"]), f"RQ1_{key}_KH": n(r["k_human"]),
+              f"RQ1_{key}_OR": d(r["odds_ratio"]), f"RQ1_{key}_P": p(r["p_holm"] if r["family"] else r["p"])}
+    for m, key in (("edges_if_any", "EIA"), ("d_ce_mean", "DCE"), ("d_i_core", "DI"), ("added_edges", "ALL"),
+                   ("edges_per_100_loc", "E100")):
+        r = rq1.loc[m]
+        v |= {f"RQ1_{key}_MED_A": d(r["median_agent"], 0), f"RQ1_{key}_MED_H": d(r["median_human"], 0),
+              f"RQ1_{key}_A": d(r["mean_agent"], 2), f"RQ1_{key}_H": d(r["mean_human"], 2),
+              f"RQ1_{key}_DELTA": d(r["cliffs_delta"], 3), f"RQ1_{key}_P": p(r["p_holm"] if r["family"] else r["p"])}
+    # Of the PRs flagged by the combined indicator, the share in which a package joins a cycle.
+    cyc, cnp = rq1.loc["new_cycle"], rq1.loc["cycle_new_pkgs"]
+    v |= {"CYC_TOTAL": n(cyc["k_agent"] + cyc["k_human"]), "CNP_TOTAL": n(cnp["k_agent"] + cnp["k_human"]),
+          "CNP_SHARE_OF_CYC": pct((cnp["k_agent"] + cnp["k_human"]) / (cyc["k_agent"] + cyc["k_human"]), 0)}
 
-    for m, key in (("added_edges", "EDGES"), ("edges_per_file", "EPF"), ("new_cycle", "CYC")):
+    rows = ["| Nhóm quy mô (số dòng) | Chỉ số | Agent | Người | OR | p (Holm) |", "|---|---|---|---|---|---|"]
+    for _, r in strata.iterrows():
+        first = r["metric"] == "adds_edge"
+        q = f"{r['stratum']} ({rng(r['loc_range'])})" if first else ""
+        lab = "% PR thêm cạnh" if first else "% PR đưa package mới vào chu trình"
+        k = 1 if first else 2
+        na, nh = (f" (n = {n(r['n_agent'])})", f" (n = {n(r['n_human'])})") if first else ("", "")
+        rows.append(f"| {q} | {lab} | {pct(r['rate_agent'], k)}{na} | {pct(r['rate_human'], k)}{nh} | "
+                    f"{d(r['odds_ratio'])} | {pt(r['p_holm'])} |")
+    v["TABLE_STRATA"] = "\n".join(rows)
+    for q in ("Q1", "Q2", "Q3", "Q4"):
+        sq = strata[strata["stratum"] == q].set_index("metric")
+        e, c2 = sq.loc["adds_edge"], sq.loc["cycle_new_pkgs"]
+        v |= {f"{q}_RANGE": rng(e["loc_range"]),
+              f"{q}_EDGES_A": pct(e["rate_agent"]), f"{q}_EDGES_H": pct(e["rate_human"]),
+              f"{q}_EDGES_OR": d(e["odds_ratio"]), f"{q}_EDGES_P": p(e["p_holm"]),
+              f"{q}_CNP_A": pct(c2["rate_agent"], 1), f"{q}_CNP_H": pct(c2["rate_human"], 1),
+              f"{q}_CNP_OR": d(c2["odds_ratio"]), f"{q}_CNP_P": p(c2["p_holm"])}
+    edge_strata = strata[strata["metric"] == "adds_edge"]
+    cnp_strata = strata[strata["metric"] == "cycle_new_pkgs"]
+    sig_q = list(edge_strata[edge_strata["p_holm"] < 0.05]["stratum"].astype(str))
+    v["STRATA_EDGES_SIG"] = ", ".join(sig_q) if sig_q else "không nhóm nào"
+    v["STRATA_EDGES_NS_MIN_P"] = p(edge_strata[edge_strata["p_holm"] >= 0.05]["p_holm"].min()) \
+        if (edge_strata["p_holm"] >= 0.05).any() else "–"
+    v["STRATA_CNP_MIN_P"] = p(cnp_strata["p_holm"].min())
+
+    for m, key in (("adds_edge", "EDGES"), ("added_edges", "NEDGES"), ("cycle_new_pkgs", "CNP")):
         r = paired.loc[m]
         v |= {f"PAIR_{key}_REPOS": n(r["repos"]), f"PAIR_{key}_AH": n(r["agent_higher"]),
               f"PAIR_{key}_HH": n(r["human_higher"]), f"PAIR_{key}_TIES": n(r["ties"]), f"PAIR_{key}_P": p(r["p"])}
-    nl_e, nl_c = nolarge.loc["added_edges"], nolarge.loc["new_cycle (rate)"]
-    v |= {"NOLARGE_N_A": n(nl_e["n_agent"]), "NOLARGE_EDGES_POS_A": pct(nl_e["share_pos_agent"]),
-          "NOLARGE_EDGES_POS_H": pct(nl_e["share_pos_human"]), "NOLARGE_EDGES_DELTA": d(nl_e["cliffs_delta"], 3),
-          "NOLARGE_EDGES_P": p(nl_e["p"]), "NOLARGE_CYC_A": pct(nl_c["rate_agent"], 2),
-          "NOLARGE_CYC_H": pct(nl_c["rate_human"], 2), "NOLARGE_CYC_P": p(nl_c["p"])}
+
+    for sub, key in (("without_largest_repo", "NOLARGE"), ("without_codex", "NOCODEX")):
+        ss = subs[subs["subset"] == sub].set_index("metric")
+        v[f"{key}_N_A"] = n(ss.loc["adds_edge", "n_agent"])
+        for m, mk in (("adds_edge", "EDGES"), ("cycle_new_pkgs", "CNP"), ("cycle_existing_only", "CEX")):
+            r = ss.loc[m]
+            k = 1 if m == "adds_edge" else 2
+            v |= {f"{key}_{mk}_A": pct(r["rate_agent"], k), f"{key}_{mk}_H": pct(r["rate_human"], k),
+                  f"{key}_{mk}_OR": d(r["odds_ratio"]), f"{key}_{mk}_P": p(r["p"])}
+
+    vlab = {"runtime (main)": "Chính: bỏ import trong TYPE_CHECKING", "all imports": "Mọi import",
+            "module level only": "Chỉ import ở mức module"}
+    rows = ["| Đồ thị | % PR thêm cạnh (agent; người) | OR (p) | % PR đưa package mới vào chu trình (agent; người) | OR (p) |",
+            "|---|---|---|---|---|"]
+    for var, g in variants.groupby("variant", sort=False):
+        e, c2 = g.set_index("metric").loc["adds_edge"], g.set_index("metric").loc["cycle_new_pkgs"]
+        rows.append(f"| {vlab[var]} | {pct(e['rate_agent'])}; {pct(e['rate_human'])} | {d(e['odds_ratio'])} ({pt(e['p'])}) | "
+                    f"{pct(c2['rate_agent'], 2)}; {pct(c2['rate_human'], 2)} | {d(c2['odds_ratio'])} ({pt(c2['p'])}) |")
+        key = {"runtime (main)": "MAIN", "all imports": "ALL", "module level only": "TOP"}[var]
+        for m, mk in (("adds_edge", "EDGES"), ("cycle_new_pkgs", "CNP"), ("new_cycle", "CYC")):
+            r = g.set_index("metric").loc[m]
+            v |= {f"VAR_{key}_{mk}_A": pct(r["rate_agent"], 2), f"VAR_{key}_{mk}_H": pct(r["rate_human"], 2),
+                  f"VAR_{key}_{mk}_OR": d(r["odds_ratio"]), f"VAR_{key}_{mk}_P": p(r["p"])}
+    v["TABLE_VARIANTS"] = "\n".join(rows)
+    # Share of PR-level edges that come only from TYPE_CHECKING imports (all minus runtime variant).
+    tc_only = (metrics.loc[metrics["status"] == "ok", "added_edges_all"] - metrics.loc[metrics["status"] == "ok", "added_edges"])
+    v["TC_ONLY_EDGES"] = n(tc_only.clip(lower=0).sum())
+    v["TC_ONLY_SHARE"] = pct(tc_only.clip(lower=0).sum() / metrics.loc[metrics["status"] == "ok", "added_edges_all"].sum())
+
+    tlab = {"agent_pr": "PR của agent", "log_loc": "log(1 + số dòng thay đổi)", "log_files": "log(1 + số file thay đổi)",
+            "merge_commit": "Kiểu merge commit", "years": "Thời điểm merge (năm)",
+            "log_modules": "log(1 + số module trước PR)", "log_pkgs_touched": "log(1 + số package PR sửa)"}
+    rows = ["| Biến | Thêm ≥ 1 cạnh: OR [KTC 95%] | p | Đưa package mới vào chu trình: OR [KTC 95%] | p |",
+            "|---|---|---|---|---|"]
+    m2 = reg[reg["model"] == "model1"]  # table: model 1 (model 2 adds the spread, collinear with files changed)
+    for term, lab in tlab.items():
+        if term == "log_pkgs_touched":
+            continue
+        cells = []
+        for outcome in ("adds_edge", "cycle_new_pkgs"):
+            r = m2[(m2["outcome"] == outcome) & (m2["term"] == term)].iloc[0]
+            cells += [f"{d(r['odds_ratio'])} [{d(r['or_low'])}; {d(r['or_high'])}]", pt(r["p"])]
+        rows.append(f"| {lab} | " + " | ".join(cells) + " |")
+    v["TABLE_REG"] = "\n".join(rows)
+    for outcome, ok_ in (("adds_edge", "EDGES"), ("cycle_new_pkgs", "CNP")):
+        for model, mk in (("model1", "M1"), ("model2", "M2")):
+            r = reg[(reg["outcome"] == outcome) & (reg["model"] == model) & (reg["term"] == "agent_pr")].iloc[0]
+            v |= {f"REG_{ok_}_{mk}_OR": d(r["odds_ratio"]), f"REG_{ok_}_{mk}_LO": d(r["or_low"]),
+                  f"REG_{ok_}_{mk}_HI": d(r["or_high"]), f"REG_{ok_}_{mk}_P": p(r["p"])}
+        r = reg[(reg["outcome"] == outcome) & (reg["model"] == "model2") & (reg["term"] == "log_pkgs_touched")].iloc[0]
+        v |= {f"REG_{ok_}_SPREAD_OR": d(r["odds_ratio"]), f"REG_{ok_}_SPREAD_P": p(r["p"])}
+        r = reg[(reg["outcome"] == outcome) & (reg["model"] == "model1") & (reg["term"] == "years")].iloc[0]
+        v |= {f"REG_{ok_}_YEARS_OR": d(r["odds_ratio"]), f"REG_{ok_}_YEARS_P": p(r["p"])}
+    r0 = reg.iloc[0]
+    v |= {"REG_N": n(r0["n"]), "REG_CLUSTERS": n(r0["clusters"]),
+          "REG_COV_CNP": "exchangeable" if (reg[reg["outcome"] == "cycle_new_pkgs"]["cov_struct"] == "Exchangeable").all()
+          else "độc lập"}
+
+    for sub, key in (("all", "ALL"), ("Q4", "Q4")):
+        r = spread.set_index("subset").loc[sub]
+        v |= {f"SPREAD_{key}_MED_A": d(r["median_agent"], 0), f"SPREAD_{key}_MED_H": d(r["median_human"], 0),
+              f"SPREAD_{key}_A": d(r["mean_agent"], 2), f"SPREAD_{key}_H": d(r["mean_human"], 2),
+              f"SPREAD_{key}_DELTA": d(r["cliffs_delta"], 3), f"SPREAD_{key}_P": p(r["p"])}
+
+    sel = selection.set_index("category")
+    st = s["selection"]
+    v |= {"SEL_ANALYSED": n(sel.loc["analysed", "prs"]), "SEL_TOTAL": n(selection["prs"].sum()),
+          "SEL_ANALYSED_SHARE": pct(sel.loc["analysed", "prs"] / selection["prs"].sum(), 0),
+          "SEL_MED_IN": d(st["median_analysed"], 0), "SEL_MED_OUT": d(st["median_excluded"], 0),
+          "SEL_DELTA": d(st["cliffs_delta"], 3), "SEL_P": p(st["p"]),
+          "SEL_SHARE_BY_AGENT": "; ".join(f"{AGENT_VI.get(a, a)} {pct(x, 0)}" for a, x in
+                                          sorted(st["analysed_share_by_agent"].items(), key=lambda kv: kv[1]))}
+    for cat, key in (("no_human_in_repo", "NOHUMAN"), ("not_on_first_parent", "NOTFOUND"),
+                     ("repo_unavailable", "UNAVAIL"), ("no_py_source_change", "NOPY")):
+        if cat in sel.index:
+            v |= {f"SEL_{key}_N": n(sel.loc[cat, "prs"]), f"SEL_{key}_MED": d(sel.loc[cat, "median_aidev_loc"], 0),
+                  f"SEL_{key}_CODEX": pct(sel.loc[cat, "share_codex"], 0)}
+
+    cont = s.get("contamination") or {}
+    if cont:
+        v |= {"CONT_K": n(cont["agent_involved"]), "CONT_N": n(cont["screened"]), "CONT_PCT": pct(cont["share"]),
+              "CONT_LO": pct(cont["share_ci"][0]), "CONT_HI": pct(cont["share_ci"][1])}
+        for m, key in (("adds_edge", "EDGES"), ("cycle_new_pkgs", "CNP")):
+            c2 = cont["metrics"][m]
+            v |= {f"CONT_{key}_A": pct(c2["rate_agent"], 2), f"CONT_{key}_H_OBS": pct(c2["rate_human_observed"], 2),
+                  f"CONT_{key}_H_UP": pct(c2["rate_human_corrected_upper"], 2)}
 
     r2 = rq2.loc["has_violation (rate)"]
     v |= {"RQ2_REPOS": n(s["rq2"]["repos"]), "RQ2_KA": n(r2["k_agent"]), "RQ2_NA": n(r2["n_agent"]),
@@ -196,15 +301,16 @@ def main() -> int:
               "VIOL_REVIEW_PREC": pct(tp / len(review), 0) if len(review) else "–",
               "VIOL_REVIEW_PRS": n(review[["repo", "number"]].drop_duplicates().shape[0])}
 
-    rows = ["| Agent | Số PR | Số kho | Số dòng (trung vị) | % PR thêm cạnh | Cạnh mới (TB) | % PR tạo chu trình [KTC 95%] |",
+    rows = ["| Agent | Số PR | Số kho | Số dòng (trung vị) | % PR thêm cạnh | Cạnh mới (TB) | % PR đưa package mới vào chu trình [KTC 95%] |",
             "|---|---|---|---|---|---|---|"]
     for _, r in rq3.iterrows():
         rows.append(f"| {AGENT_VI.get(r['agent'], r['agent'])} | {n(r['prs'])} | {n(r['repos'])} | {d(r['median_loc'], 0)} | "
-                    f"{pct(r['share_added_edges'])} | {d(r['mean_added_edges'], 2)} | {pct(r['new_cycle_rate'])} "
-                    f"[{d(100 * r['new_cycle_ci_low'], 1)}; {d(100 * r['new_cycle_ci_high'], 1)}] |")
+                    f"{pct(r['share_added_edges'])} | {d(r['mean_added_edges'], 2)} | {pct(r['cycle_new_pkgs_rate'])} "
+                    f"[{d(100 * r['cycle_new_pkgs_ci_low'], 1)}; {d(100 * r['cycle_new_pkgs_ci_high'], 1)}] |")
     v["TABLE_RQ3"] = "\n".join(rows)
     k = s["rq3_tests"]
     cc = rq3.set_index("agent").loc["Claude_Code"] if "Claude_Code" in set(rq3["agent"]) else None
+    chi = k.get("cycle_new_pkgs (rate)", {})
     v |= {"RQ3_K": n(k["added_edges"]["k"]), "RQ3_N": n(k["added_edges"]["n"]),
           "RQ3_H_EDGES": d(k["added_edges"]["H"], 1), "RQ3_P_EDGES": p(k["added_edges"]["p_holm"]),
           "RQ3_EPS_EDGES": d(k["added_edges"]["epsilon_sq"], 3),
@@ -212,23 +318,37 @@ def main() -> int:
           "RQ3_EPS_LOC": d(k["loc_changed"]["epsilon_sq"], 3),
           "RQ3_H_E100": d(k["edges_per_100_loc"]["H"], 1), "RQ3_P_E100": p(k["edges_per_100_loc"]["p"]),
           "RQ3_EPS_E100": d(k["edges_per_100_loc"]["epsilon_sq"], 3),
-          "RQ3_CHI": d(k["new_cycle (rate)"]["chi2"], 1), "RQ3_CHI_P": p(k["new_cycle (rate)"]["p_holm"]),
-          "RQ3_CHI_MINEXP": d(k["new_cycle (rate)"]["min_expected"], 1),
+          "RQ3_CHI": d(chi.get("chi2", math.nan), 1), "RQ3_CHI_P": p(chi.get("p_holm", math.nan)),
+          "RQ3_CHI_MINEXP": d(chi.get("min_expected", math.nan), 1),
           "RQ3_EXCLUDED": ", ".join(f"{AGENT_VI.get(a, a)} ({n(c)} PR)" for a, c in s["excluded_agents"].items()) or "không có"}
     if cc is not None:
-        v |= {"CC_PRS": n(cc["prs"]), "CC_LOC": d(cc["median_loc"], 0), "CC_CYC": pct(cc["new_cycle_rate"]),
-              "CC_EDGES": pct(cc["share_added_edges"])}
+        v |= {"CC_PRS": n(cc["prs"]), "CC_LOC": d(cc["median_loc"], 0), "CC_CNP": pct(cc["cycle_new_pkgs_rate"]),
+              "CC_CNP_K": n(cc["cycle_new_pkgs_k"]), "CC_CNP_LO": d(100 * cc["cycle_new_pkgs_ci_low"], 1),
+              "CC_CNP_HI": d(100 * cc["cycle_new_pkgs_ci_high"], 1), "CC_EDGES": pct(cc["share_added_edges"])}
         dunn = pd.DataFrame(s["dunn_holm"]["edges_per_100_loc"])
         others = [a for a in dunn.columns if a != "Claude_Code"]
         sig = [AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] < 0.05]
         vi_list = lambda xs: ", ".join(xs[:-1]) + " và " + xs[-1] if len(xs) > 1 else "".join(xs)
         v["CC_E100_SIG_VS"] = vi_list(sig) if sig else "không agent nào"
-        v["CC_E100_NS_VS"] = vi_list([AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] >= 0.05]) or "không agent nào"
         ns = [AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] >= 0.05]
+        v["CC_E100_NS_VS"] = vi_list(ns) or "không agent nào"
         v["CC_E100_CLAUSE"] = (f"khác {v['CC_E100_SIG_VS']}, nhưng không khác {vi_list(ns)}" if ns and sig
                                else "khác tất cả các agent còn lại" if sig else "không khác agent nào")
 
-    v |= {"MANUAL_N": n(len(manual)), "MANUAL_MATCH": n((manual["match"] == "yes").sum())}
+    # Manual check by two reviewers of the author team (step 05): agreement and tool accuracy.
+    yn = lambda col: manual[col].str.strip().str.lower()  # noqa: E731
+    manual_done = bool(len(manual)) and all(yn(c).isin(["yes", "no"]).all()
+                                             for c in ("rater1_match", "rater2_match", "consensus_match"))
+    if manual_done:
+        r1, r2 = yn("rater1_match") == "yes", yn("rater2_match") == "yes"
+        po = float((r1 == r2).mean())
+        pe = float(r1.mean() * r2.mean() + (1 - r1.mean()) * (1 - r2.mean()))
+        kappa = (po - pe) / (1 - pe) if pe < 1 else 1.0
+        v |= {"MANUAL_N": n(len(manual)), "MANUAL_MATCH": n((yn("consensus_match") == "yes").sum()),
+              "MANUAL_AGREE": pct(po, 0), "MANUAL_KAPPA": d(kappa, 2)}
+    else:
+        v |= {"MANUAL_N": n(len(manual)) if len(manual) else "[chưa có]", "MANUAL_MATCH": "[chưa có]",
+              "MANUAL_AGREE": "[chưa có]", "MANUAL_KAPPA": "[chưa có]"}
 
     # Figure 6 (ECDF of added edges among PRs that add edges), on the analysis sample.
     both = ok.groupby("repo")["group"].agg(set)
@@ -259,71 +379,132 @@ def main() -> int:
     # Every qualitative statement in the paper and the report, checked against the numbers.
     # The documents are not built while any of these is false (tools/build_docs.py reads claims.json).
     alpha = 0.05
+    alpha = 0.05
+    r = rq1
+    regi = reg.set_index(["outcome", "model", "term"])
+    or_ = lambda o, m, t="agent_pr": regi.loc[(o, m, t), "odds_ratio"]  # noqa: E731
+    pv = lambda o, m, t="agent_pr": regi.loc[(o, m, t), "p"]  # noqa: E731
+    sig = lambda row: (row["p_holm"] if row["family"] else row["p"]) < alpha  # noqa: E731
+    lower = lambda row: row["rate_agent"] < row["rate_human"]  # noqa: E731
+    var = variants.set_index(["variant", "metric"])
+    sub = subs.set_index(["subset", "metric"])
+    q = strata.set_index(["stratum", "metric"])
+    spr = spread.set_index("subset")
+    selc = selection.set_index("category")
+    by_agent = s["selection"]["analysed_share_by_agent"]
+    cont = s.get("contamination") or {}
+    rq3i = rq3.set_index("agent")
+    okd = metrics[metrics["status"] == "ok"]
     claims = {
-        "RQ1: agent PRs add an edge less often than human PRs, significant after Holm":
-            rq1.loc["added_edges", "share_pos_agent"] < rq1.loc["added_edges", "share_pos_human"]
-            and rq1.loc["added_edges", "p_holm"] < alpha,
-        "RQ1: agent PRs create a new cycle less often than human PRs, significant after Holm":
-            c["rate_agent"] < c["rate_human"] and c["p_holm"] < alpha,
-        "RQ1: Δ Ce significant after Holm with a negligible effect; Δ I of core packages not significant":
-            rq1.loc["d_ce_mean", "p_holm"] < alpha and abs(rq1.loc["d_ce_mean", "cliffs_delta"]) < 0.147
-            and rq1.loc["d_i_core", "p_holm"] >= alpha,
-        "RQ1: every |Cliff's δ| in Table 4 is below 0.07":
-            bool((rq1.loc[list(labels), "cliffs_delta"].abs() < 0.07).all()),
-        "Size strata: no significant difference in Q1-Q2 (both metrics)":
-            bool((low["p_holm"] >= alpha).all()),
-        "Size strata: Q3 added-edge share lower for agents and significant":
-            q3.loc["added_edges", "share_pos_agent"] < q3.loc["added_edges", "share_pos_human"]
-            and q3.loc["added_edges", "p_holm"] < alpha,
-        "Size strata: new-cycle rate lower for agents in Q2-Q4 but not significant in any stratum after Holm":
-            bool((cyc_strata["p_holm"] >= alpha).all())
-            and bool((cyc_strata[cyc_strata["stratum"] != "Q1"]["rate_agent"] < cyc_strata[cyc_strata["stratum"] != "Q1"]["rate_human"]).all()),
-        "Size strata: Q4 new-cycle rate far above Q1 in both groups (\"PR lớn ... cao hơn hẳn PR nhỏ\")":
-            bool(q4.loc["new_cycle (rate)", "rate_agent"] > 5 * strata[(strata["stratum"] == "Q1") & (strata["metric"] == "new_cycle (rate)")]["rate_agent"].iloc[0]
-                 and q4.loc["new_cycle (rate)", "rate_human"] > 5 * strata[(strata["stratum"] == "Q1") & (strata["metric"] == "new_cycle (rate)")]["rate_human"].iloc[0]),
-        "Data: close to half of measured agent PRs are in repositories without human PRs (\"Gần một nửa\")":
-            0.4 <= lost.sum() / (ok["group"] == "agent").sum() < 0.5,
-        "Data: OpenAI Codex is close to half of the agent sample (\"gần một nửa\")": 0.4 <= codex_share < 0.5,
+        # Abstract, RQ1
+        "RQ1: agent PRs add an edge less often, significant after Holm": lower(r.loc["adds_edge"]) and sig(r.loc["adds_edge"]),
+        "RQ1: agent PRs add a package edge less often, significant after Holm":
+            lower(r.loc["adds_pkg_edge"]) and sig(r.loc["adds_pkg_edge"]),
+        "RQ1: among PRs adding edges, same median and no significant difference":
+            r.loc["edges_if_any", "median_agent"] == r.loc["edges_if_any", "median_human"] and not sig(r.loc["edges_if_any"]),
+        "RQ1: Δ Ce lower for agents (δ < 0), significant after Holm":
+            r.loc["d_ce_mean", "cliffs_delta"] < 0 and sig(r.loc["d_ce_mean"]),
+        "RQ1: Δ I of core packages not significant": not sig(r.loc["d_i_core"]),
+        "RQ1: C_new not significant after Holm": not sig(r.loc["cycle_new_pkgs"]),
+        "RQ1: C_exist lower for agents, significant after Holm":
+            lower(r.loc["cycle_existing_only"]) and sig(r.loc["cycle_existing_only"]),
+        "RQ1: fewer than 60% of PRs flagged by the combined indicator bring a new package into a cycle (\"chỉ\")":
+            (r.loc["cycle_new_pkgs", "k_agent"] + r.loc["cycle_new_pkgs", "k_human"])
+            / (r.loc["new_cycle", "k_agent"] + r.loc["new_cycle", "k_human"]) < 0.6,
+        "RQ1: every effect is small (|δ| < 0.147, rate differences < 5 percentage points)":
+            bool((r["cliffs_delta"].dropna().abs() < 0.147).all())
+            and bool(((r["rate_agent"] - r["rate_human"]).dropna().abs() < 0.05).all()),
+        # Regression
+        "GEE model 1: agent PRs add an edge less often (OR < 1, p < 0.05)":
+            or_("adds_edge", "model1") < 1 and pv("adds_edge", "model1") < alpha,
+        "GEE model 1: no significant agent effect on C_new": pv("cycle_new_pkgs", "model1") >= alpha,
+        "GEE: lines changed, files changed and repository size raise the odds of adding an edge":
+            all(or_("adds_edge", "model1", t) > 1 and pv("adds_edge", "model1", t) < alpha
+                for t in ("log_loc", "log_files", "log_modules")),
+        "GEE model 1: later PRs add edges less often (years OR < 1, p < 0.05)":
+            or_("adds_edge", "model1", "years") < 1 and pv("adds_edge", "model1", "years") < alpha,
+        "GEE model 2: packages touched is the strongest predictor of adding an edge (largest OR)":
+            or_("adds_edge", "model2", "log_pkgs_touched") == reg[(reg["outcome"] == "adds_edge") & (reg["model"] == "model2")]["odds_ratio"].max(),
+        "GEE: adding the spread moves the agent OR only slightly towards 1 (\"chỉ đổi\")":
+            or_("adds_edge", "model1") < or_("adds_edge", "model2") < 1
+            and or_("adds_edge", "model2") - or_("adds_edge", "model1") < 0.1,
+        # Size strata
+        "Strata: agent share of PRs adding an edge lower in all four strata":
+            all(q.loc[(k, "adds_edge"), "rate_agent"] < q.loc[(k, "adds_edge"), "rate_human"] for k in ("Q1", "Q2", "Q3", "Q4")),
+        "Strata: adding an edge significant after Holm only in Q3":
+            list(strata[(strata["metric"] == "adds_edge") & (strata["p_holm"] < alpha)]["stratum"].astype(str)) == ["Q3"],
+        "Strata: C_new not significant in any stratum": bool((strata[strata["metric"] == "cycle_new_pkgs"]["p_holm"] >= alpha).all()),
+        # Fig 6
+        "Fig 6: agent 90th percentile lower": float(v["ECDF_P90_A"].replace(",", ".")) < float(v["ECDF_P90_H"].replace(",", ".")),
+        "Fig 6: PRs with more than 100 new edges occur only in the human group": pos_a.max() <= 100 and pos_h.max() > 100,
+        # Sensitivity
+        "Sensitivity: adding an edge still lower and significant without the largest repository and without Codex":
+            all(lower(sub.loc[(k, "adds_edge")]) and sub.loc[(k, "adds_edge"), "p"] < alpha
+                for k in ("without_largest_repo", "without_codex")),
+        "Sensitivity: adding an edge lower and significant with all imports and with module-level imports":
+            all(lower(var.loc[(k, "adds_edge")]) and var.loc[(k, "adds_edge"), "p"] < alpha
+                for k in ("all imports", "module level only")),
+        "Sensitivity: C_new not significant with either alternative graph":
+            all(var.loc[(k, "cycle_new_pkgs"), "p"] >= alpha for k in ("all imports", "module level only")),
+        "Sensitivity: TYPE_CHECKING-only edges are a small share (< 5%) of new edges":
+            (okd["added_edges_all"] - okd["added_edges"]).clip(lower=0).sum() / okd["added_edges_all"].sum() < 0.05,
+        "Sensitivity: without Codex, agent C_new rate above the human rate but not significant":
+            sub.loc[("without_codex", "cycle_new_pkgs"), "rate_agent"] > sub.loc[("without_codex", "cycle_new_pkgs"), "rate_human"]
+            and sub.loc[("without_codex", "cycle_new_pkgs"), "p"] >= alpha,
+        "Repo-paired: mean new edges higher for humans in more repositories, significant":
+            paired.loc["added_edges", "human_higher"] > paired.loc["added_edges", "agent_higher"] and paired.loc["added_edges", "p"] < alpha,
+        "Repo-paired: share of PRs adding an edge not significant": not (paired.loc["adds_edge", "p"] < alpha),
+        "Repo-paired: C_new higher for humans in more repositories, significant":
+            paired.loc["cycle_new_pkgs", "human_higher"] > paired.loc["cycle_new_pkgs", "agent_higher"]
+            and paired.loc["cycle_new_pkgs", "p"] < alpha,
+        # Data and selection
         "Data: agent PRs larger than human PRs (median LOC)": t1.loc["agent", "median_loc"] > t1.loc["human", "median_loc"],
-        "Size strata: Q4 added-edge share lower for agents and significant":
-            q4.loc["added_edges", "share_pos_agent"] < q4.loc["added_edges", "share_pos_human"]
-            and q4.loc["added_edges", "p_holm"] < alpha,
-        "Repo-paired: humans higher in more repositories for added edges, significant":
-            paired.loc["added_edges", "human_higher"] > paired.loc["added_edges", "agent_higher"]
-            and paired.loc["added_edges", "p"] < alpha,
-        "Repo-paired: humans higher in more repositories for new cycles, significant":
-            paired.loc["new_cycle", "human_higher"] > paired.loc["new_cycle", "agent_higher"]
-            and paired.loc["new_cycle", "p"] < alpha,
-        "Without largest repo: agents still add edges less often":
-            nl_e["share_pos_agent"] < nl_e["share_pos_human"],
-        "Fig 6: equal medians, shorter agent tail (90th percentile lower)":
-            pos_a.median() == pos_h.median() and pos_a.quantile(0.9) < pos_h.quantile(0.9),
-        "Fig 6: agent ECDF lies on or above the human ECDF for most values (agent stochastically smaller)":
-            sum((pos_a <= x).mean() >= (pos_h <= x).mean() for x in range(1, 101)) >= 90,
-        "Fig 6: PRs with more than 100 new edges occur only in the human group":
-            pos_a.max() <= 100 and pos_h.max() > 100,
-        "Fig 7: repositories on both sides of the diagonal":
-            paired.loc["added_edges", "agent_higher"] > 0 and paired.loc["added_edges", "human_higher"] > 0,
-        "RQ2: difference in violation rate not significant": r2["p_holm"] >= alpha,
-        "RQ2: violations are rare (< 1% of PRs in both groups)":
-            r2["rate_agent"] < 0.01 and r2["rate_human"] < 0.01,
+        "Data: agent PRs sit in smaller repositories (median modules before)":
+            t1.loc["agent", "median_modules_before"] < t1.loc["human", "median_modules_before"],
+        "Data: most not-found agent PRs are in the two named repositories (\"phần lớn\")":
+            nf.head(2).sum() / nf.sum() > 0.5,
+        "Data: most agent PRs of repositories without humans belong to the named repository (\"phần lớn\")":
+            lost.iloc[0] / lost.sum() > 0.5,
+        "Selection: analysed agent PRs larger than excluded ones, significant":
+            s["selection"]["median_analysed"] > s["selection"]["median_excluded"] and s["selection"]["p"] < alpha,
+        "Selection: Codex excluded far more often (analysed share below half of any other agent's)":
+            by_agent["OpenAI_Codex"] < 0.5 * min(x for a_, x in by_agent.items() if a_ != "OpenAI_Codex"),
+        "Contamination: screened agent involvement found, and correction widens the gap":
+            bool(cont) and cont["agent_involved"] > 0
+            and cont["metrics"]["adds_edge"]["rate_human_corrected_upper"] >= cont["metrics"]["adds_edge"]["rate_human_observed"],
+        "Discussion: C_exist PRs sit in larger repositories than other PRs (median modules before)":
+            sample.loc[sample["cycle_existing_only"] == 1, "modules_before"].median() > sample["modules_before"].median(),
+        "Discussion: agent PRs touch fewer packages (δ < 0, significant), clearest in Q4":
+            spr.loc["all", "cliffs_delta"] < 0 and spr.loc["all", "p"] < alpha
+            and spr.loc["Q4", "cliffs_delta"] < spr.loc["all", "cliffs_delta"]
+            and spr.loc["Q4", "median_agent"] < spr.loc["Q4", "median_human"],
+        "Discussion: Codex has the smallest PRs and the lowest C_new rate among agents":
+            rq3i["median_loc"].idxmin() == "OpenAI_Codex" and rq3i["cycle_new_pkgs_rate"].idxmin() == "OpenAI_Codex",
+        # RQ2, RQ3
+        "RQ2: violations rare (< 1% in both groups) and not significant": r2["rate_agent"] < 0.01 and r2["rate_human"] < 0.01
+            and r2["p_holm"] >= alpha,
         "RQ3: added edges differ between agents (Kruskal-Wallis, Holm)": k["added_edges"]["p_holm"] < alpha,
-        "RQ3: PR size differs between agents": k["loc_changed"]["p"] < alpha,
+        "RQ3: PR size differs clearly between agents (\"rõ rệt\": ε² larger than for added edges)":
+            k["loc_changed"]["p"] < alpha and k["loc_changed"]["epsilon_sq"] > k["added_edges"]["epsilon_sq"],
+        "RQ3: chi-square not used because the smallest expected count is below 5": chi.get("min_expected", 0) < 5,
     }
     if cc is not None:
+        others = rq3i.drop("Claude_Code")
         claims |= {
             "RQ3: Claude Code has the largest median PR size": cc["median_loc"] == rq3["median_loc"].max(),
-            "RQ3: Claude Code has the highest share of PRs adding edges":
-                cc["share_added_edges"] == rq3["share_added_edges"].max(),
-            "RQ3: Claude Code has the highest new-cycle rate": cc["new_cycle_rate"] == rq3["new_cycle_rate"].max(),
-            "RQ3: Claude Code is the smallest or second-smallest agent sample (\"mẫu còn nhỏ\")":
-                cc["prs"] <= sorted(rq3["prs"])[1],
+            "RQ3: Claude Code has the highest C_new rate": cc["cycle_new_pkgs_rate"] == rq3["cycle_new_pkgs_rate"].max(),
+            "RQ3: Claude Code C_new interval does not overlap Codex and Copilot":
+                all(cc["cycle_new_pkgs_ci_low"] > others.loc[a_, "cycle_new_pkgs_ci_high"] for a_ in ("OpenAI_Codex", "Copilot")),
+            "RQ3: Claude Code is the smallest or second-smallest agent sample (\"mẫu còn nhỏ\")": cc["prs"] <= sorted(rq3["prs"])[1],
             "RQ3: after normalising by 100 LOC Claude Code still differs from at least one agent":
                 v["CC_E100_SIG_VS"] != "không agent nào",
         }
     if len(review):
         claims["Violation review completed (every flagged edge has a verdict)"] = bool(review["verdict"].isin(["true", "false"]).all())
-    claims["Manual check: sample reviewed and every sampled PR matches"] = bool(len(manual)) and bool((manual["match"] == "yes").all())
+    # Not a blocking claim: the authors must complete the two-reviewer check themselves (pending.json).
+    pending = [] if manual_done else ["Manual check (manual_check_team.csv): two reviewers of the author team "
+                                      "must fill rater1_*, rater2_* and consensus_match"]
+    (t / "pending.json").write_text(json.dumps(pending, ensure_ascii=False, indent=1), encoding="utf-8")
     result = {k_: bool(ok_) for k_, ok_ in claims.items()}
     (t / "claims.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     failed = [k_ for k_, ok_ in result.items() if not ok_]

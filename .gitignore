@@ -24,3 +24,6 @@ results/logs/*.jsonl
 results/figures/fig[2-7]_*
 results/figures/*.svg
 config/layer_rules/*.json
+
+# archived outputs of earlier runs (local only)
+results/archive_*/
