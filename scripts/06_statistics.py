@@ -164,9 +164,13 @@ def regression(d: pd.DataFrame) -> pd.DataFrame:
 
     Model 1 controls PR size, merge style, merge date and repository size at the time of the PR.
     Model 2 adds the number of packages the PR touches (its spread).
+    For RQ3, model 1 is also fitted with the agent term split into Claude Code and the other agents,
+    to see whether the high C_new rate of Claude Code remains once PR size is controlled.
     """
     m = d.copy()
     m["agent_pr"] = (m["group"] == "agent").astype(int)
+    m["claude_code"] = (m["agent"] == "Claude_Code").astype(int) * m["agent_pr"]
+    m["other_agent"] = m["agent_pr"] - m["claude_code"]
     m["adds_edge"] = (m["added_edges"] > 0).astype(int)
     m["log_loc"] = np.log1p(m["loc_changed"])
     m["log_files"] = np.log1p(m["files_changed"])
@@ -176,9 +180,13 @@ def regression(d: pd.DataFrame) -> pd.DataFrame:
     m["log_modules"] = np.log1p(m["modules_before"])
     m["log_pkgs_touched"] = np.log1p(m["pkgs_touched"])
     base = "agent_pr + log_loc + log_files + merge_commit + years + log_modules"
+    by_agent = base.replace("agent_pr", "claude_code + other_agent")
     rows = []
     for outcome in ("adds_edge", "cycle_new_pkgs"):
-        for model, rhs in (("model1", base), ("model2", base + " + log_pkgs_touched")):
+        specs = [("model1", base), ("model2", base + " + log_pkgs_touched")]
+        if outcome == "cycle_new_pkgs":
+            specs.append(("model1_by_agent", by_agent))
+        for model, rhs in specs:
             cols = ["repo", outcome] + [c.strip() for c in rhs.split("+")]
             data = m[cols].dropna()
             # Exchangeable working correlation; rare outcomes may not converge with it, then the
