@@ -133,8 +133,7 @@ Repositories deleted from GitHub are reported and excluded.
 `05b_review_violations.py` lists every flagged layering edge with its commit link so that it can be compared with
 the source code (`verdict` and `reason` columns). `05c_screen_human_prs.py` estimates how many "human" PRs were
 made with an agent: it downloads 50 randomly drawn human PR pages from github.com and searches them for agent
-branch names, generated-by footers, agent co-author trailers, agent links and agent bot accounts.
-`05_manual_check.py` draws a sample for an optional two-reviewer check; this check is not used in the paper.
+branch names, agent footers in the PR description, agent co-author trailers, agent links and agent bot accounts.
 
 ### Pipeline
 
@@ -145,7 +144,6 @@ branch names, generated-by footers, agent co-author trailers, agent links and ag
 | 02 | `02_filter_agent_prs.py` | `data/interim/agent_prs.csv`, `results/logs/filter_funnel.csv` |
 | 03 | `03_mine_repos.py` | `data/interim/mined/`, `data/interim/mined_prs.csv`, `results/logs/mining_repos.csv` |
 | 04 | `04_layer_violations.py` | `data/processed/pr_metrics.csv`, `data/processed/violations.jsonl`, `config/layer_rules/*.json` |
-| 05 | `05_manual_check.py` (optional, not used in the paper) | `results/manual_check/manual_check_team.csv` |
 | 05b | `05b_review_violations.py` | `results/manual_check/violations_review.csv` |
 | 05c | `05c_screen_human_prs.py` | `results/manual_check/human_screen.csv` |
 | 06 | `06_statistics.py` | `results/tables/*.csv` (incl. GEE regression, sensitivity), `stats_summary.json` |
@@ -214,15 +212,10 @@ config/          settings.yaml and generated per-repository layer rules
 src/aierosion/   library: data filters, git access, import graph, metrics, layer rules, statistics
 scripts/         numbered pipeline steps 00-08
 tests/           unit tests
-tools/           draw.io export; manuscript checks and Word build (author tooling, see below)
+tools/           export of the draw.io diagrams
 data/processed/  final per-PR metrics (data/raw and data/interim are re-created by the scripts)
 results/         tables, figures, manual checks, run logs
 ```
-
-`tools/md2docx.py`, `tools/build_docs.py`, `tools/word_finalize.py` and `tools/render_docx.py` build the
-manuscript and report as Word/PDF files with Microsoft Word. They expect the manuscript sources, which are kept
-outside this repository, and are not needed to reproduce the results. `tools/check_paper.py` checks a Markdown
-manuscript (citation order, table and figure references, wording rules).
 
 ## License
 

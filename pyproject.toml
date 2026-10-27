@@ -1,22 +1,19 @@
 [project]
 name = "aierosion"
 version = "0.1.0"
-description = "Measuring architecture erosion introduced by AI coding agent pull requests (AIDev dataset)"
+description = "Signs of architecture erosion in pull requests of AI coding agents: measurement pipeline on the AIDev dataset"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "pandas",
     "pyarrow",
     "huggingface_hub",
-    "pydriller",
     "networkx",
     "scipy",
     "scikit-posthocs",
     "statsmodels",
     "matplotlib",
-    "requests",
     "pyyaml",
-    "python-dotenv",
 ]
 
 [dependency-groups]

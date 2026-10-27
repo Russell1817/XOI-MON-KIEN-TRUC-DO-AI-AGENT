@@ -21,7 +21,6 @@ class DepGraph:
     edges: set[tuple[str, str]]  # file -> file, main variant
     missing_blobs: int = 0
     parse_errors: int = 0
-    unresolved: dict = field(default_factory=dict)
     edge_kinds: dict[tuple[str, str], set[str]] = field(default_factory=dict)
 
     def variant(self, name: str) -> "DepGraph":

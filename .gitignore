@@ -27,3 +27,9 @@ config/layer_rules/*.json
 
 # archived outputs of earlier runs (local only)
 results/archive_*/
+
+# manuscript and report tooling (Word build, manuscript checks): kept locally, not part of the pipeline
+tools/*
+!tools/export_drawio.py
+# optional two-reviewer sampling step, not used in the paper
+scripts/05_manual_check.py

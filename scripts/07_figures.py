@@ -16,7 +16,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.ticker import FuncFormatter
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 from aierosion.config import path
 from aierosion.stats.tests import wilson
@@ -60,33 +59,6 @@ def save(fig, name: str) -> None:
     fig.savefig(out / f"{name}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
 
-
-def pipeline() -> None:
-    steps = [
-        ("AIDev-pop\n(Hugging Face)", "Lọc kho Python,\nPR đã merge,\nsửa mã nguồn .py"),
-        ("Clone kho\n(git, shallow)", "Tìm commit PR trên\nnhánh chính: agent\nvà người (đối chứng)"),
-        ("Đồ thị import\ntrước (M^1) và\nsau (M) mỗi PR", "Chỉ số: cạnh mới,\nchu trình (SCC),\nCe, I, vi phạm tầng"),
-        ("Kiểm định\nMann–Whitney,\nFisher,\nKruskal–Wallis", "Kiểm tra độ vững:\nquy mô PR,\ntheo kho"),
-    ]
-    fig, ax = plt.subplots(figsize=(7.2, 2.6))
-    ax.set_xlim(0, 4)
-    ax.set_ylim(0, 2)
-    ax.axis("off")
-    w = 0.76
-    for i, (top, bottom) in enumerate(steps):
-        x = i + 0.1
-        ax.add_patch(FancyBboxPatch((x, 1.08), w, 0.8, boxstyle="round,pad=0.02,rounding_size=0.06",
-                                    fc="#eef4fc", ec=AGENT, lw=1.2))
-        ax.text(x + w / 2, 1.48, top, ha="center", va="center", fontsize=8, color=INK)
-        ax.add_patch(FancyBboxPatch((x, 0.12), w, 0.8, boxstyle="round,pad=0.02,rounding_size=0.06",
-                                    fc="white", ec=MUTED, lw=0.9, ls="--"))
-        ax.text(x + w / 2, 0.52, bottom, ha="center", va="center", fontsize=7.5, color=MUTED)
-        ax.add_patch(FancyArrowPatch((x + w / 2, 1.06), (x + w / 2, 0.94), arrowstyle="-|>", mutation_scale=8,
-                                     color=MUTED, lw=0.9))
-        if i < 3:
-            ax.add_patch(FancyArrowPatch((x + w + 0.03, 1.48), (x + 1.07, 1.48), arrowstyle="-|>",
-                                         mutation_scale=14, color=INK, lw=1.2, zorder=5))
-    save(fig, "fig1_pipeline")
 
 
 def _rate_rows(d: pd.DataFrame, col: str, label: str) -> list[dict]:

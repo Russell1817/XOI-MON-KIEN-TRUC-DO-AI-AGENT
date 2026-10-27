@@ -1,8 +1,8 @@
 """Step 08: collect every number quoted in the report and the paper into results/tables/numbers.json.
 
 Values are formatted the Vietnamese way (decimal comma, dot as thousands separator). The Markdown
-sources use {{KEY}} placeholders that tools/md2docx.py fills from this file, so every number in the
-documents comes from the same analysis run (writing rule 2.1).
+sources of the paper and the report use {{KEY}} placeholders filled from this file, so every number in
+the documents comes from the same analysis run.
 """
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ import pandas as pd
 
 from aierosion.config import path
 from aierosion.runlog import log_run
-from aierosion.stats.tests import wilson
 
 AGENT_VI = {"OpenAI_Codex": "OpenAI Codex", "Copilot": "GitHub Copilot", "Claude_Code": "Claude Code",
             "Cursor": "Cursor", "Devin": "Devin", "Google_Jules": "Google Jules"}
@@ -97,6 +96,10 @@ def main() -> int:
     v |= {
         "FUNNEL_FINAL_PR": n(funnel["agent_prs"].iloc[-1]), "FUNNEL_FINAL_REPO": n(funnel["repos"].iloc[-1]),
         "REPO_CLONED": n((mining["status"] == "ok").sum()),
+        # Mining effort of the final run (results/logs/mining_repos.csv): per-repository wall time and clone size.
+        "MINING_HOURS": d(mining["seconds"].sum() / 3600, 1), "MINING_MED_S": d(mining["seconds"].median(), 0),
+        "MINING_MAX_S": n(round(mining["seconds"].max())), "MINING_MAX_REPO": mining.loc[mining["seconds"].idxmax(), "repo"],
+        "CLONE_GB": d(mining["clone_mb"].sum() / 1024, 1),
         "REPO_DELETED": n(mining.get("error", pd.Series(dtype=str)).fillna("").astype(str).str.contains("Repository not found").sum()),
         "AGENT_IN_REPOS": n(len(a_all)),
         "AGENT_NOT_FOUND": n((a_all["status"] == "not_on_first_parent").sum()),
@@ -180,8 +183,10 @@ def main() -> int:
         lab = "% PR thêm cạnh" if first else "% PR đưa package mới vào chu trình"
         k = 1 if first else 2
         na, nh = (f" (n = {n(r['n_agent'])})", f" (n = {n(r['n_human'])})") if first else ("", "")
+        # With a zero count the Haldane-corrected OR can point the wrong way (0% vs 0.08% -> OR 1.95).
+        orr = "–" if 0 in (r["k_agent"], r["k_human"]) else d(r["odds_ratio"])
         rows.append(f"| {q} | {lab} | {pct(r['rate_agent'], k)}{na} | {pct(r['rate_human'], k)}{nh} | "
-                    f"{d(r['odds_ratio'])} | {pt(r['p_holm'])} |")
+                    f"{orr} | {pt(r['p_holm'])} |")
     v["TABLE_STRATA"] = "\n".join(rows)
     for q in ("Q1", "Q2", "Q3", "Q4"):
         sq = strata[strata["stratum"] == q].set_index("metric")
@@ -258,6 +263,8 @@ def main() -> int:
         v |= {f"REG_{ok_}_YEARS_OR": d(r["odds_ratio"]), f"REG_{ok_}_YEARS_P": p(r["p"])}
     r0 = reg.iloc[0]
     v |= {"REG_N": n(r0["n"]), "REG_CLUSTERS": n(r0["clusters"]),
+          # PRs left out of the GEE models because loc_changed is missing (diff touched a file > 1 MB).
+          "REG_DROPPED": n(s["analysis_sample"]["prs"] - r0["n"]),
           "REG_COV_CNP": "exchangeable" if (reg[reg["outcome"] == "cycle_new_pkgs"]["cov_struct"] == "Exchangeable").all()
           else "độc lập"}
 
@@ -285,6 +292,8 @@ def main() -> int:
     if cont:
         v |= {"CONT_K": n(cont["agent_involved"]), "CONT_N": n(cont["screened"]), "CONT_PCT": pct(cont["share"]),
               "CONT_LO": pct(cont["share_ci"][0]), "CONT_HI": pct(cont["share_ci"][1])}
+        screen = pd.read_csv(path("manual_check") / "human_screen.csv")
+        v["CONT_FLAGGED"] = n(int(screen.loc[screen["fetched"] == True, "flagged"].sum()))  # noqa: E712
         for m, key in (("adds_edge", "EDGES"), ("cycle_new_pkgs", "CNP")):
             c2 = cont["metrics"][m]
             v |= {f"CONT_{key}_A": pct(c2["rate_agent"], 2), f"CONT_{key}_H_OBS": pct(c2["rate_human_observed"], 2),
@@ -325,6 +334,11 @@ def main() -> int:
         v |= {"CC_PRS": n(cc["prs"]), "CC_LOC": d(cc["median_loc"], 0), "CC_CNP": pct(cc["cycle_new_pkgs_rate"]),
               "CC_CNP_K": n(cc["cycle_new_pkgs_k"]), "CC_CNP_LO": d(100 * cc["cycle_new_pkgs_ci_low"], 1),
               "CC_CNP_HI": d(100 * cc["cycle_new_pkgs_ci_high"], 1), "CC_EDGES": pct(cc["share_added_edges"])}
+        # C_new of Claude Code vs human PRs once PR size, merge style, date and repository size are controlled.
+        ra = reg[(reg["outcome"] == "cycle_new_pkgs") & (reg["model"] == "model1_by_agent")].set_index("term")
+        v |= {"CC_ADJ_OR": d(ra.loc["claude_code", "odds_ratio"]), "CC_ADJ_LO": d(ra.loc["claude_code", "or_low"]),
+              "CC_ADJ_HI": d(ra.loc["claude_code", "or_high"]), "CC_ADJ_P": p(ra.loc["claude_code", "p"]),
+              "OTHER_ADJ_OR": d(ra.loc["other_agent", "odds_ratio"]), "OTHER_ADJ_P": p(ra.loc["other_agent", "p"])}
         dunn = pd.DataFrame(s["dunn_holm"]["edges_per_100_loc"])
         others = [a for a in dunn.columns if a != "Claude_Code"]
         sig = [AGENT_VI.get(a, a) for a in others if dunn.loc["Claude_Code", a] < 0.05]
@@ -335,7 +349,7 @@ def main() -> int:
         v["CC_E100_CLAUSE"] = (f"khác {v['CC_E100_SIG_VS']}, nhưng không khác {vi_list(ns)}" if ns and sig
                                else "khác tất cả các agent còn lại" if sig else "không khác agent nào")
 
-    # Manual check by two reviewers of the author team (step 05): agreement and tool accuracy.
+    # Manual check by the two authors (step 05): agreement and tool accuracy.
     yn = lambda col: manual[col].str.strip().str.lower()  # noqa: E731
     manual_done = bool(len(manual)) and all(yn(c).isin(["yes", "no"]).all()
                                              for c in ("rater1_match", "rater2_match", "consensus_match"))
@@ -377,7 +391,7 @@ def main() -> int:
     print(f"{len(v)} values -> {out}")
 
     # Every qualitative statement in the paper and the report, checked against the numbers.
-    # The documents are not built while any of these is false (tools/build_docs.py reads claims.json).
+    # The documents are not built while any of these is false.
     alpha = 0.05
     alpha = 0.05
     r = rq1
@@ -390,7 +404,6 @@ def main() -> int:
     sub = subs.set_index(["subset", "metric"])
     q = strata.set_index(["stratum", "metric"])
     spr = spread.set_index("subset")
-    selc = selection.set_index("category")
     by_agent = s["selection"]["analysed_share_by_agent"]
     cont = s.get("contamination") or {}
     rq3i = rq3.set_index("agent")
@@ -478,6 +491,10 @@ def main() -> int:
             spr.loc["all", "cliffs_delta"] < 0 and spr.loc["all", "p"] < alpha
             and spr.loc["Q4", "cliffs_delta"] < spr.loc["all", "cliffs_delta"]
             and spr.loc["Q4", "median_agent"] < spr.loc["Q4", "median_human"],
+        "Limitations: Codex is close to half of analysed agent PRs (\"gần một nửa\": 40-50%)":
+            0.40 <= codex_share < 0.50,
+        "Discussion: more than half of the PRs flagged by the combined indicator are C_exist (\"hơn một nửa\")":
+            (cnp["k_agent"] + cnp["k_human"]) / (cyc["k_agent"] + cyc["k_human"]) < 0.5,
         "Discussion: Codex has the smallest PRs and the lowest C_new rate among agents":
             rq3i["median_loc"].idxmin() == "OpenAI_Codex" and rq3i["cycle_new_pkgs_rate"].idxmin() == "OpenAI_Codex",
         # RQ2, RQ3
@@ -498,12 +515,15 @@ def main() -> int:
             "RQ3: Claude Code is the smallest or second-smallest agent sample (\"mẫu còn nhỏ\")": cc["prs"] <= sorted(rq3["prs"])[1],
             "RQ3: after normalising by 100 LOC Claude Code still differs from at least one agent":
                 v["CC_E100_SIG_VS"] != "không agent nào",
+            "RQ3: Claude Code median PR size falls in the largest size quartile (Q4)":
+                cc["median_loc"] >= int(strata[strata["stratum"] == "Q4"]["loc_range"].iloc[0].split("-")[0]),
+            "RQ3: with PR size controlled (GEE), Claude Code C_new does not differ from human PRs":
+                regi.loc[("cycle_new_pkgs", "model1_by_agent", "claude_code"), "p"] >= alpha,
         }
     if len(review):
         claims["Violation review completed (every flagged edge has a verdict)"] = bool(review["verdict"].isin(["true", "false"]).all())
-    # Not a blocking claim: the authors must complete the two-reviewer check themselves (pending.json).
-    pending = [] if manual_done else ["Manual check (manual_check_team.csv): two reviewers of the author team "
-                                      "must fill rater1_*, rater2_* and consensus_match"]
+    # The two-reviewer check (manual_check_team.csv) was not carried out and is not reported in the paper.
+    pending = []
     (t / "pending.json").write_text(json.dumps(pending, ensure_ascii=False, indent=1), encoding="utf-8")
     result = {k_: bool(ok_) for k_, ok_ in claims.items()}
     (t / "claims.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")

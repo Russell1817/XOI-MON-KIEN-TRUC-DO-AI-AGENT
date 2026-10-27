@@ -81,11 +81,6 @@ def first_parent_pr_commits(repo: Path) -> list[PRCommit]:
     return result
 
 
-def is_shallow_boundary(repo: Path, sha: str) -> bool:
-    shallow = repo / "shallow"
-    return shallow.exists() and sha in shallow.read_text().split()
-
-
 def commit_messages(repo: Path, rev_range: str) -> str:
     return git(repo, "log", "--format=%an <%ae>%n%B", rev_range, check=False)
 
@@ -111,7 +106,7 @@ def ls_py(repo: Path, commit: str) -> list[tuple[str, str]]:
         if not entry:
             continue
         meta, p = entry.split("\t", 1)
-        mode, typ, sha = meta.split()
+        _, typ, sha = meta.split()
         if typ == "blob" and p.endswith(".py"):
             files.append((p, sha))
     return files

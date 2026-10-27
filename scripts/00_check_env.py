@@ -6,11 +6,10 @@ import shutil
 import subprocess
 import sys
 
-import requests
 
-from aierosion.config import ROOT, github_token, settings
+from aierosion.config import ROOT, settings
 
-LIBS = ["pandas", "pyarrow", "huggingface_hub", "pydriller", "networkx", "scipy", "scikit_posthocs", "matplotlib", "yaml"]
+LIBS = ["pandas", "pyarrow", "huggingface_hub", "networkx", "scipy", "scikit_posthocs", "matplotlib", "yaml"]
 MIN_FREE_GB = 20
 
 
@@ -42,15 +41,6 @@ def main() -> int:
 
     results.append(check("settings", "aidev" in settings(), "config/settings.yaml loaded"))
 
-    token = github_token()
-    if token is None:
-        check("github token", False, "GITHUB_TOKEN missing in .env (needed from step 03)")
-    else:
-        r = requests.get("https://api.github.com/rate_limit", headers={"Authorization": f"Bearer {token}"}, timeout=20)
-        limit = r.json().get("resources", {}).get("core", {}).get("limit") if r.ok else None
-        check("github token", limit == 5000, f"HTTP {r.status_code}, core limit {limit}")
-
-    # The token is reported but not required for steps 01-02.
     return 0 if all(results) else 1
 
 

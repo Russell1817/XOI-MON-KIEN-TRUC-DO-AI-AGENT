@@ -1,12 +1,10 @@
 """Load settings.yaml and resolve project paths."""
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -23,8 +21,3 @@ def path(key: str) -> Path:
     p.mkdir(parents=True, exist_ok=True)
     return p
 
-
-def github_token() -> str | None:
-    load_dotenv(ROOT / ".env")
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    return token or None
