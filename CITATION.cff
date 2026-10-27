@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software or data, please cite it as below."
-title: "Architecture erosion introduced by AI coding agent pull requests: an empirical study on the AIDev dataset (code and data)"
+title: "Signs of architecture erosion in pull requests of AI coding agents: an empirical study on the AIDev dataset (measurement pipeline)"
 authors:
   - family-names: "Võ"
     given-names: "Hoàng Anh"
