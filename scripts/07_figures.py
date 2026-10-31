@@ -8,6 +8,7 @@ series also has its own marker shape so the figures stay readable in black-and-w
 from __future__ import annotations
 
 import json
+import unicodedata
 import sys
 
 import matplotlib
@@ -22,7 +23,6 @@ from aierosion.stats.tests import wilson
 
 AGENT, HUMAN = "#2a78d6", "#eb6834"
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#d9d8d4"
-STYLE = {"agent": (AGENT, "o", "PR của agent"), "human": (HUMAN, "s", "PR của người")}
 
 plt.rcParams.update({
     "font.family": "DejaVu Sans", "font.size": 9, "axes.edgecolor": MUTED, "axes.labelcolor": INK,
@@ -31,7 +31,24 @@ plt.rcParams.update({
 })
 
 
-VI_NUM = FuncFormatter(lambda v, _: f"{v:g}".replace(".", ","))  # Vietnamese decimal comma
+LANG = "en" if "--lang" in sys.argv and sys.argv[sys.argv.index("--lang") + 1] == "en" else "vi"
+EN = {'PR của agent': 'Agent PRs', 'PR của người': 'Human PRs', 'Thêm ≥1 cạnh\nphụ thuộc (file)': 'Adds ≥1 dependency\nedge (file)', 'Thêm ≥1 cạnh\ngiữa package': 'Adds ≥1 edge\nbetween packages', 'Đưa package mới\nvào chu trình': 'Brings a new package\ninto a cycle', 'Chỉ thêm cạnh trong\nchu trình có sẵn': 'Adds edges only inside\nexisting cycles', 'Có vi phạm\nphân tầng (RQ2)': 'Has a layering\nviolation (RQ2)', 'Tỷ lệ PR (%), thanh ngang: khoảng tin cậy Wilson 95%': 'Share of PRs (%), bars: 95% Wilson confidence interval', 'Thêm ≥1 cạnh phụ thuộc': 'Adds ≥1 dependency edge', 'Đưa package mới vào chu trình': 'Brings a new package into a cycle', 'Tỷ lệ PR (%)': 'Share of PRs (%)', 'Tứ phân vị số dòng thay đổi': 'Quartile of changed lines', 'Tỷ lệ PR (%), khoảng tin cậy Wilson 95%': 'Share of PRs (%), 95% Wilson confidence interval', 'Số cạnh phụ thuộc mới của một PR (thang log)': 'New dependency edges per PR (log scale)', 'Tỷ lệ tích lũy (%)': 'Cumulative share (%)', 'Cạnh mới trung bình – PR của người': 'Mean new edges – human PRs', 'Cạnh mới trung bình – PR của agent': 'Mean new edges – agent PRs'}
+
+
+def L(text: str) -> str:
+    """Figure text in the language of the run (Vietnamese by default, English with --lang en)."""
+    if LANG != "en":
+        return text
+    key = unicodedata.normalize("NFC", text)
+    return next((v for k, v in EN.items() if unicodedata.normalize("NFC", k) == key), text)
+
+
+def dec(s: str) -> str:
+    return s if LANG == "en" else s.replace(".", ",")
+
+
+VI_NUM = FuncFormatter(lambda v, _: dec(f"{v:g}"))  # decimal comma in Vietnamese, point in English
+STYLE = {"agent": (AGENT, "o", L("PR của agent")), "human": (HUMAN, "s", L("PR của người"))}
 
 
 AGENT_NAMES = {"OpenAI_Codex": "OpenAI Codex", "Copilot": "GitHub Copilot", "Claude_Code": "Claude Code",
@@ -40,11 +57,11 @@ AGENT_NAMES = {"OpenAI_Codex": "OpenAI Codex", "Copilot": "GitHub Copilot", "Cla
 
 def vi_int(x: int) -> str:
     """Integer with dot thousands separator (Vietnamese convention)."""
-    return f"{int(x):,}".replace(",", ".")
+    return f"{int(x):,}" if LANG == "en" else f"{int(x):,}".replace(",", ".")
 
 
 def vi(x: float, digits: int = 1) -> str:
-    return f"{x:.{digits}f}".replace(".", ",")
+    return dec(f"{x:.{digits}f}")
 
 
 def save(fig, name: str) -> None:
@@ -55,6 +72,7 @@ def save(fig, name: str) -> None:
             if type(axis.get_major_formatter()) is matplotlib.ticker.ScalarFormatter:
                 axis.set_major_formatter(VI_NUM)
     out = path("figures")
+    name = f"{name}_en" if LANG == "en" else name
     fig.savefig(out / f"{name}.svg", bbox_inches="tight")
     fig.savefig(out / f"{name}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -76,11 +94,11 @@ def rates_by_group(d: pd.DataFrame) -> None:
     e = d[d["rq2_eligible"] == True]  # noqa: E712
     groups = e.groupby("repo")["group"].agg(set)
     e = e[e["repo"].isin(groups[groups.apply(lambda s: {"agent", "human"} <= s)].index)]
-    rows = (_rate_rows(d, "adds_edge", "Thêm ≥1 cạnh\nphụ thuộc (file)")
-            + _rate_rows(d, "adds_pkg_edge", "Thêm ≥1 cạnh\ngiữa package")
-            + _rate_rows(d, "cycle_new_pkgs", "Đưa package mới\nvào chu trình")
-            + _rate_rows(d, "cycle_existing_only", "Chỉ thêm cạnh trong\nchu trình có sẵn")
-            + _rate_rows(e, "has_violation", "Có vi phạm\nphân tầng (RQ2)"))
+    rows = (_rate_rows(d, "adds_edge", L("Thêm ≥1 cạnh\nphụ thuộc (file)"))
+            + _rate_rows(d, "adds_pkg_edge", L("Thêm ≥1 cạnh\ngiữa package"))
+            + _rate_rows(d, "cycle_new_pkgs", L("Đưa package mới\nvào chu trình"))
+            + _rate_rows(d, "cycle_existing_only", L("Chỉ thêm cạnh trong\nchu trình có sẵn"))
+            + _rate_rows(e, "has_violation", L("Có vi phạm\nphân tầng (RQ2)")))
     r = pd.DataFrame(rows)
     labels = list(dict.fromkeys(r["metric"]))
     fig, ax = plt.subplots(figsize=(6.4, 3.6))
@@ -94,7 +112,7 @@ def rates_by_group(d: pd.DataFrame) -> None:
             ax.text(hv + 0.6, yv, f"{vi(xv)}% ({vi_int(k)}/{vi_int(n)})", fontsize=7, color=MUTED, va="center")
     ax.set_yticks(range(len(labels)), labels)
     ax.invert_yaxis()
-    ax.set_xlabel("Tỷ lệ PR (%), thanh ngang: khoảng tin cậy Wilson 95%")
+    ax.set_xlabel(L("Tỷ lệ PR (%), thanh ngang: khoảng tin cậy Wilson 95%"))
     ax.set_xlim(0, r["hi"].max() * 100 * 1.4)
     ax.grid(axis="y", visible=False)
     ax.legend(loc="lower right")
@@ -106,7 +124,7 @@ def size_strata(d: pd.DataFrame) -> None:
     s["size_q"] = pd.qcut(s["loc_changed"], 4, labels=["Q1", "Q2", "Q3", "Q4"])
     bounds = s.groupby("size_q", observed=True)["loc_changed"].agg(["min", "max"])
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.8), sharex=True)
-    for ax, (col, title) in zip(axes, [("added_edges", "Thêm ≥1 cạnh phụ thuộc"), ("cycle_new_pkgs", "Đưa package mới vào chu trình")]):
+    for ax, (col, title) in zip(axes, [("added_edges", L("Thêm ≥1 cạnh phụ thuộc")), ("cycle_new_pkgs", L("Đưa package mới vào chu trình"))]):
         for j, grp in enumerate(("agent", "human")):
             color, marker, name = STYLE[grp]
             pts = []
@@ -121,18 +139,18 @@ def size_strata(d: pd.DataFrame) -> None:
         ax.set_xticks(range(4), [f"{q}\n{vi_int(r['min'])}–{vi_int(r['max'])}" for q, r in bounds.iterrows()], fontsize=7.5)
         ax.set_ylim(bottom=0)
         ax.grid(axis="x", visible=False)
-    axes[0].set_ylabel("Tỷ lệ PR (%)")
+    axes[0].set_ylabel(L("Tỷ lệ PR (%)"))
     axes[0].legend(loc="upper left")
     for ax in axes:
-        ax.set_xlabel("Tứ phân vị số dòng thay đổi", fontsize=8, color=INK, labelpad=6)
+        ax.set_xlabel(L("Tứ phân vị số dòng thay đổi"), fontsize=8, color=INK, labelpad=6)
     save(fig, "fig4_size_strata")
 
 
 def per_agent() -> None:
     t = pd.read_csv(path("tables") / "table3_rq3.csv").sort_values("prs", ascending=True)
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 0.5 + 0.45 * len(t)), sharey=True)
-    for ax, (k_col, title) in zip(axes, [("share_added_edges", "Thêm ≥1 cạnh phụ thuộc"),
-                                          ("cycle_new_pkgs_rate", "Đưa package mới vào chu trình")]):
+    for ax, (k_col, title) in zip(axes, [("share_added_edges", L("Thêm ≥1 cạnh phụ thuộc")),
+                                          ("cycle_new_pkgs_rate", L("Đưa package mới vào chu trình"))]):
         if k_col == "share_added_edges":
             ks = (t["share_added_edges"] * t["prs"]).round().astype(int)
         else:
@@ -146,7 +164,7 @@ def per_agent() -> None:
         ax.grid(axis="y", visible=False)
     axes[0].set_yticks(range(len(t)), [f"{AGENT_NAMES.get(a, a)} (n = {vi_int(n)})" for a, n in zip(t["agent"], t["prs"])])
     for ax in axes:
-        ax.set_xlabel("Tỷ lệ PR (%), khoảng tin cậy Wilson 95%", fontsize=8, color=INK, labelpad=6)
+        ax.set_xlabel(L("Tỷ lệ PR (%), khoảng tin cậy Wilson 95%"), fontsize=8, color=INK, labelpad=6)
     save(fig, "fig5_per_agent")
 
 
@@ -162,8 +180,8 @@ def edges_distribution(d: pd.DataFrame) -> None:
         ax.plot([med], [50], marker=marker, color=color, ms=7, mec="white", mew=0.8, ls="none")
     ax.set_xscale("log")
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
-    ax.set_xlabel("Số cạnh phụ thuộc mới của một PR (thang log)")
-    ax.set_ylabel("Tỷ lệ tích lũy (%)")
+    ax.set_xlabel(L("Số cạnh phụ thuộc mới của một PR (thang log)"))
+    ax.set_ylabel(L("Tỷ lệ tích lũy (%)"))
     ax.set_ylim(0, 101)
     ax.legend(loc="lower right")
     save(fig, "fig6_edges_ecdf")
@@ -186,12 +204,12 @@ def repo_scatter(d: pd.DataFrame, min_each: int = 3) -> None:
     ticks = [t for t in (0, 0.1, 1, 10, 100) if t <= lim]
     for axis in (ax.xaxis, ax.yaxis):
         axis.set_major_locator(matplotlib.ticker.FixedLocator(ticks))
-        axis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}".replace(".", ",")))
-    ax.text(0.04, 0.96, f"Trên đường chéo (agent cao hơn): {above} kho\nDưới đường chéo (người cao hơn): {below} kho",
+        axis.set_major_formatter(FuncFormatter(lambda v, _: dec(f"{v:g}")))
+    ax.text(0.04, 0.96, (f"Above the diagonal (agent higher): {above} repositories\nBelow the diagonal (human higher): {below} repositories" if LANG == "en" else f"Trên đường chéo (agent cao hơn): {above} kho\nDưới đường chéo (người cao hơn): {below} kho"),
             transform=ax.transAxes, va="top", fontsize=7.5, color=INK, linespacing=1.4,
             bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="none", alpha=0.9), zorder=3)
-    ax.set_xlabel("Cạnh mới trung bình – PR của người")
-    ax.set_ylabel("Cạnh mới trung bình – PR của agent")
+    ax.set_xlabel(L("Cạnh mới trung bình – PR của người"))
+    ax.set_ylabel(L("Cạnh mới trung bình – PR của agent"))
     save(fig, "fig7_repo_scatter")
 
 

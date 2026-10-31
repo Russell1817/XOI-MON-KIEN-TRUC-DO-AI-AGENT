@@ -1,0 +1,52 @@
+<mxfile host="drawio" version="32.4.1">
+  <diagram id="pipeline" name="Hình 1 – Quy trình">
+    <mxGraphModel dx="1000" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="240" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Row 1 -->
+        <mxCell id="s1" value="&lt;b&gt;(1) AIDev-pop data&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="0" y="20" width="305" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="s2" value="&lt;b&gt;(2) Repository mining (git)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="340" y="20" width="305" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="s3" value="&lt;b&gt;(3) Two PR groups&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="680" y="20" width="305" height="56" as="geometry"/>
+        </mxCell>
+        <!-- Row 2 -->
+        <mxCell id="s4" value="&lt;b&gt;(4) Dependency graphs&lt;br&gt;before (M′) and after (M)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="0" y="150" width="305" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="s5" value="&lt;b&gt;(5) Erosion metrics (after − before)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="340" y="150" width="305" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="s6" value="&lt;b&gt;(6) Statistical analysis&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E8F0FB;strokeColor=#2A78D6;strokeWidth=2;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="680" y="150" width="305" height="56" as="geometry"/>
+        </mxCell>
+        <!-- Arrows -->
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;" edge="1" parent="1" source="s1" target="s2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;" edge="1" parent="1" source="s2" target="s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="s3" target="s4">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="832" y="113"/>
+              <mxPoint x="152" y="113"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e45" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;" edge="1" parent="1" source="s4" target="s5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e56" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0B0B0B;" edge="1" parent="1" source="s5" target="s6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

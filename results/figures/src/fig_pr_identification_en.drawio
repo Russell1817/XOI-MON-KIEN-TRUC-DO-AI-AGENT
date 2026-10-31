@@ -1,0 +1,84 @@
+<mxfile host="drawio" version="32.4.1">
+  <diagram id="pr_id" name="Xác định PR từ lịch sử git">
+    <mxGraphModel dx="1000" dy="500" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="290" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="lbl_main" value="&lt;b&gt;Main branch&lt;/b&gt;&lt;br&gt;(first-parent)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="0" y="145" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="lbl_branch" value="PR branch #12" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=17;fontStyle=2;fontColor=#52514E;" vertex="1" parent="1">
+          <mxGeometry x="0" y="60" width="130" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- main line commits -->
+        <mxCell id="c1" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#0B0B0B;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="140" y="155" width="30" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="c2" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#0B0B0B;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="260" y="155" width="30" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="m1" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#2A78D6;strokeColor=#0B0B0B;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="480" y="155" width="30" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="s1" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#2A78D6;strokeColor=#0B0B0B;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="700" y="155" width="30" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="c5" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#0B0B0B;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="880" y="155" width="30" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- branch commits -->
+        <mxCell id="b1" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#F2F2F0;strokeColor=#52514E;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="330" y="60" width="30" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="b2" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#F2F2F0;strokeColor=#52514E;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="410" y="60" width="30" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- main line edges (child -> parent drawn left to right as history) -->
+        <mxCell id="e1" style="html=1;endArrow=none;strokeWidth=3;strokeColor=#0B0B0B;" edge="1" parent="1" source="c1" target="c2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" style="html=1;endArrow=none;strokeWidth=3;strokeColor=#0B0B0B;" edge="1" parent="1" source="c2" target="m1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" style="html=1;endArrow=none;strokeWidth=3;strokeColor=#0B0B0B;" edge="1" parent="1" source="m1" target="s1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" style="html=1;endArrow=none;strokeWidth=3;strokeColor=#0B0B0B;" edge="1" parent="1" source="s1" target="c5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eb0" style="html=1;endArrow=none;strokeWidth=2;strokeColor=#52514E;dashed=1;" edge="1" parent="1" source="c2" target="b1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eb1" style="html=1;endArrow=none;strokeWidth=2;strokeColor=#52514E;dashed=1;" edge="1" parent="1" source="b1" target="b2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eb2" style="html=1;endArrow=none;strokeWidth=2;strokeColor=#52514E;dashed=1;" edge="1" parent="1" source="b2" target="m1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- annotations -->
+        <mxCell id="a_before" value="&lt;b&gt;before&lt;/b&gt; = M′" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="205" y="190" width="140" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_merge" value="&lt;b&gt;M&lt;/b&gt; =&lt;br&gt;&quot;Merge pull request #12&quot;&lt;br&gt;(merge, 2 parents)&lt;br&gt;&lt;b&gt;after&lt;/b&gt; = M" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="380" y="190" width="230" height="86" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_squash" value="&lt;b&gt;S&lt;/b&gt; =&lt;br&gt;&quot;Fix login error (#15)&quot;&lt;br&gt;(squash, 1 parent)&lt;br&gt;before = S′, after = S" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=17;fontColor=#0B0B0B;" vertex="1" parent="1">
+          <mxGeometry x="600" y="190" width="230" height="86" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_c5" value="commit that closes&lt;br&gt;no PR: skipped" style="text;html=1;align=center;verticalAlign=top;fontFamily=Arial;fontSize=16;fontStyle=2;fontColor=#52514E;" vertex="1" parent="1">
+          <mxGeometry x="830" y="190" width="140" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- classification box -->
+        <mxCell id="legend" value="● commit that closes a PR (analysed)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=16;fontColor=#2A78D6;" vertex="1" parent="1">
+          <mxGeometry x="610" y="60" width="350" height="30" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
