@@ -9,7 +9,7 @@ import pytest
 
 from aierosion.data.filters import is_source_py
 from aierosion.git import repo as gitrepo
-from aierosion.graph.build import GraphBuilder
+from aierosion.graph.build import DepGraph, GraphBuilder
 from aierosion.graph.imports import ModuleIndex, module_parts, package_of, parse_import_kinds, parse_imports
 from aierosion.metrics.compute import compute, variant_metrics
 
@@ -169,6 +169,15 @@ def test_graph_and_metrics_on_git_repo(tmp_path):
     assert m["d_ce_mean"] == 1.0  # app.models gains one efferent package
     assert not math.isnan(m["d_i_core"])
     assert gitrepo.loc_changed(repo, c0, c1) == 1
+
+
+def test_core_ties_broken_by_name():
+    # a, b and c all have Ca = 1; with 10% the core is one package, and it must be "a" on every run.
+    files = {"x/m.py", "a/m.py", "b/m.py", "c/m.py"}
+    g0 = DepGraph(files=files, edges={("x/m.py", "a/m.py"), ("x/m.py", "b/m.py"), ("x/m.py", "c/m.py")})
+    g1 = DepGraph(files=files, edges=g0.edges | {("a/m.py", "c/m.py")})
+    m, _, _ = compute(g0, g1, {"a/m.py"}, 0.10)
+    assert m["d_i_core"] == 0.5  # I(a) goes from 0 to 1/2
 
 
 def test_moved_file_adds_no_edges(tmp_path):

@@ -76,7 +76,8 @@ def compute(
     touched = {package_of(f) for f in changed_py} & pn0 & pn1
     d_ce = [ce1[p] - ce0[p] for p in touched]
 
-    ranked = sorted((p for p in pn0 if ca0[p] > 0), key=lambda p: ca0[p], reverse=True)
+    # Ties in Ca are broken by package name, so the core set does not depend on set iteration order.
+    ranked = sorted((p for p in pn0 if ca0[p] > 0), key=lambda p: (-ca0[p], p))
     core = ranked[: max(1, math.ceil(core_fraction * len(ranked)))] if ranked else []
     d_i = [
         _instability(ce1[p], ca1[p]) - _instability(ce0[p], ca0[p]) for p in core if p in pn1
