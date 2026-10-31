@@ -30,6 +30,8 @@ def d(x: float, k: int = 2) -> str:
     return f"{x:.{k}f}".replace(".", ",").replace("-", "−")  # typographic minus sign
 
 
+# Percentages: one decimal place; two for the rare-outcome metrics (human rate below 10%: package edges, C_new,
+# C_exist, layering violations) wherever they appear, including their confidence intervals.
 def pct(x: float, k: int = 1) -> str:
     return d(100 * x, k) + "%"
 
@@ -118,9 +120,11 @@ def main() -> int:
     }
     # Share of agent PRs not found on the first-parent chain, per agent and in the two largest sources.
     nf = a_all[a_all["status"] == "not_on_first_parent"]["repo"].value_counts()
-    v["NOT_FOUND_TOP2"] = ", ".join(f"{r} ({n(c)})" for r, c in nf.head(2).items())
+    top2 = [f"{r} ({n(c)})" for r, c in nf.head(2).items()]
+    v["NOT_FOUND_TOP2"] = " và ".join(top2)
+    v["NOT_FOUND_TOP2_EN_LIST"] = " and ".join(top2)
     found = a_all.groupby("agent")["status"].apply(lambda x: (x != "not_on_first_parent").mean())
-    v["FOUND_RATE_BY_AGENT"] = "; ".join(f"{AGENT_VI.get(k, k)} {pct(x, 0)}" for k, x in found.sort_values().items())
+    v["FOUND_RATE_BY_AGENT"] = "; ".join(f"{AGENT_VI.get(k, k)} {pct(x)}" for k, x in found.sort_values().items())
 
     largest_n = int((ok[(ok["group"] == "agent")]["repo"] == s["largest_agent_repo"]).sum())
     v["LARGEST_REPO_AGENT_PRS"] = n(largest_n)
@@ -174,7 +178,7 @@ def main() -> int:
     # Of the PRs flagged by the combined indicator, the share in which a package joins a cycle.
     cyc, cnp = rq1.loc["new_cycle"], rq1.loc["cycle_new_pkgs"]
     v |= {"CYC_TOTAL": n(cyc["k_agent"] + cyc["k_human"]), "CNP_TOTAL": n(cnp["k_agent"] + cnp["k_human"]),
-          "CNP_SHARE_OF_CYC": pct((cnp["k_agent"] + cnp["k_human"]) / (cyc["k_agent"] + cyc["k_human"]), 0)}
+          "CNP_SHARE_OF_CYC": pct((cnp["k_agent"] + cnp["k_human"]) / (cyc["k_agent"] + cyc["k_human"]))}
 
     rows = ["| Nhóm quy mô (số dòng) | Chỉ số | Agent | Người | OR | *p* (Holm) |", "|---|---|---|---|---|---|"]
     for _, r in strata.iterrows():
@@ -194,7 +198,7 @@ def main() -> int:
         v |= {f"{q}_RANGE": rng(e["loc_range"]),
               f"{q}_EDGES_A": pct(e["rate_agent"]), f"{q}_EDGES_H": pct(e["rate_human"]),
               f"{q}_EDGES_OR": d(e["odds_ratio"]), f"{q}_EDGES_P": p(e["p_holm"]),
-              f"{q}_CNP_A": pct(c2["rate_agent"], 1), f"{q}_CNP_H": pct(c2["rate_human"], 1),
+              f"{q}_CNP_A": pct(c2["rate_agent"], 2), f"{q}_CNP_H": pct(c2["rate_human"], 2),
               f"{q}_CNP_OR": d(c2["odds_ratio"]), f"{q}_CNP_P": p(c2["p_holm"])}
     edge_strata = strata[strata["metric"] == "adds_edge"]
     cnp_strata = strata[strata["metric"] == "cycle_new_pkgs"]
@@ -229,7 +233,8 @@ def main() -> int:
         key = {"runtime (main)": "MAIN", "all imports": "ALL", "module level only": "TOP"}[var]
         for m, mk in (("adds_edge", "EDGES"), ("cycle_new_pkgs", "CNP"), ("new_cycle", "CYC")):
             r = g.set_index("metric").loc[m]
-            v |= {f"VAR_{key}_{mk}_A": pct(r["rate_agent"], 2), f"VAR_{key}_{mk}_H": pct(r["rate_human"], 2),
+            kv = 1 if m == "adds_edge" else 2
+            v |= {f"VAR_{key}_{mk}_A": pct(r["rate_agent"], kv), f"VAR_{key}_{mk}_H": pct(r["rate_human"], kv),
                   f"VAR_{key}_{mk}_OR": d(r["odds_ratio"]), f"VAR_{key}_{mk}_P": p(r["p"])}
     v["TABLE_VARIANTS"] = "\n".join(rows)
     # Core-package threshold (step 03b): Δ I at 5%, 10% and 20%; sensitivity analysis, so unadjusted p.
@@ -292,16 +297,16 @@ def main() -> int:
     sel = selection.set_index("category")
     st = s["selection"]
     v |= {"SEL_ANALYSED": n(sel.loc["analysed", "prs"]), "SEL_TOTAL": n(selection["prs"].sum()),
-          "SEL_ANALYSED_SHARE": pct(sel.loc["analysed", "prs"] / selection["prs"].sum(), 0),
+          "SEL_ANALYSED_SHARE": pct(sel.loc["analysed", "prs"] / selection["prs"].sum()),
           "SEL_MED_IN": d(st["median_analysed"], 0), "SEL_MED_OUT": d(st["median_excluded"], 0),
           "SEL_DELTA": d(st["cliffs_delta"], 3), "SEL_P": p(st["p"]),
-          "SEL_SHARE_BY_AGENT": "; ".join(f"{AGENT_VI.get(a, a)} {pct(x, 0)}" for a, x in
+          "SEL_SHARE_BY_AGENT": "; ".join(f"{AGENT_VI.get(a, a)} {pct(x)}" for a, x in
                                           sorted(st["analysed_share_by_agent"].items(), key=lambda kv: kv[1]))}
     for cat, key in (("no_human_in_repo", "NOHUMAN"), ("not_on_first_parent", "NOTFOUND"),
                      ("repo_unavailable", "UNAVAIL"), ("no_py_source_change", "NOPY")):
         if cat in sel.index:
             v |= {f"SEL_{key}_N": n(sel.loc[cat, "prs"]), f"SEL_{key}_MED": d(sel.loc[cat, "median_aidev_loc"], 0),
-                  f"SEL_{key}_CODEX": pct(sel.loc[cat, "share_codex"], 0)}
+                  f"SEL_{key}_CODEX": pct(sel.loc[cat, "share_codex"])}
 
     cont = s.get("contamination") or {}
     if cont:
@@ -311,8 +316,9 @@ def main() -> int:
         v["CONT_FLAGGED"] = n(int(screen.loc[screen["fetched"] == True, "flagged"].sum()))  # noqa: E712
         for m, key in (("adds_edge", "EDGES"), ("cycle_new_pkgs", "CNP")):
             c2 = cont["metrics"][m]
-            v |= {f"CONT_{key}_A": pct(c2["rate_agent"], 2), f"CONT_{key}_H_OBS": pct(c2["rate_human_observed"], 2),
-                  f"CONT_{key}_H_UP": pct(c2["rate_human_corrected_upper"], 2)}
+            kc = 1 if m == "adds_edge" else 2
+            v |= {f"CONT_{key}_A": pct(c2["rate_agent"], kc), f"CONT_{key}_H_OBS": pct(c2["rate_human_observed"], kc),
+                  f"CONT_{key}_H_UP": pct(c2["rate_human_corrected_upper"], kc)}
 
     r2 = rq2.loc["has_violation (rate)"]
     v |= {"RQ2_REPOS": n(s["rq2"]["repos"]), "RQ2_KA": n(r2["k_agent"]), "RQ2_NA": n(r2["n_agent"]),
@@ -322,15 +328,15 @@ def main() -> int:
     if len(review):
         tp = int((review["verdict"] == "true").sum())
         v |= {"VIOL_REVIEW_EDGES": n(len(review)), "VIOL_REVIEW_TRUE": n(tp),
-              "VIOL_REVIEW_PREC": pct(tp / len(review), 0) if len(review) else "–",
+              "VIOL_REVIEW_PREC": pct(tp / len(review)) if len(review) else "–",
               "VIOL_REVIEW_PRS": n(review[["repo", "number"]].drop_duplicates().shape[0])}
 
     rows = ["| Agent | Số PR | Số kho | Số dòng (trung vị) | % PR thêm cạnh | Cạnh mới (TB) | % PR đưa package mới vào chu trình [KTC 95%] |",
             "|---|---|---|---|---|---|---|"]
     for _, r in rq3.iterrows():
         rows.append(f"| {AGENT_VI.get(r['agent'], r['agent'])} | {n(r['prs'])} | {n(r['repos'])} | {d(r['median_loc'], 0)} | "
-                    f"{pct(r['share_added_edges'])} | {d(r['mean_added_edges'], 2)} | {pct(r['cycle_new_pkgs_rate'])} "
-                    f"[{d(100 * r['cycle_new_pkgs_ci_low'], 1)}; {d(100 * r['cycle_new_pkgs_ci_high'], 1)}] |")
+                    f"{pct(r['share_added_edges'])} | {d(r['mean_added_edges'], 2)} | {pct(r['cycle_new_pkgs_rate'], 2)} "
+                    f"[{d(100 * r['cycle_new_pkgs_ci_low'], 2)}; {d(100 * r['cycle_new_pkgs_ci_high'], 2)}] |")
     v["TABLE_RQ3"] = "\n".join(rows)
     k = s["rq3_tests"]
     cc = rq3.set_index("agent").loc["Claude_Code"] if "Claude_Code" in set(rq3["agent"]) else None
@@ -346,9 +352,9 @@ def main() -> int:
           "RQ3_CHI_MINEXP": d(chi.get("min_expected", math.nan), 1),
           "RQ3_EXCLUDED": ", ".join(f"{AGENT_VI.get(a, a)} ({n(c)} PR)" for a, c in s["excluded_agents"].items()) or "không có"}
     if cc is not None:
-        v |= {"CC_PRS": n(cc["prs"]), "CC_LOC": d(cc["median_loc"], 0), "CC_CNP": pct(cc["cycle_new_pkgs_rate"]),
-              "CC_CNP_K": n(cc["cycle_new_pkgs_k"]), "CC_CNP_LO": d(100 * cc["cycle_new_pkgs_ci_low"], 1),
-              "CC_CNP_HI": d(100 * cc["cycle_new_pkgs_ci_high"], 1), "CC_EDGES": pct(cc["share_added_edges"])}
+        v |= {"CC_PRS": n(cc["prs"]), "CC_LOC": d(cc["median_loc"], 0), "CC_CNP": pct(cc["cycle_new_pkgs_rate"], 2),
+              "CC_CNP_K": n(cc["cycle_new_pkgs_k"]), "CC_CNP_LO": d(100 * cc["cycle_new_pkgs_ci_low"], 2),
+              "CC_CNP_HI": d(100 * cc["cycle_new_pkgs_ci_high"], 2), "CC_EDGES": pct(cc["share_added_edges"])}
         # C_new of Claude Code vs human PRs once PR size, merge style, date and repository size are controlled.
         ra = reg[(reg["outcome"] == "cycle_new_pkgs") & (reg["model"] == "model1_by_agent")].set_index("term")
         v |= {"CC_ADJ_OR": d(ra.loc["claude_code", "odds_ratio"]), "CC_ADJ_LO": d(ra.loc["claude_code", "or_low"]),
@@ -377,7 +383,7 @@ def main() -> int:
         pe = float(r1.mean() * r2.mean() + (1 - r1.mean()) * (1 - r2.mean()))
         kappa = (po - pe) / (1 - pe) if pe < 1 else 1.0
         v |= {"MANUAL_N": n(len(manual)), "MANUAL_MATCH": n((yn("consensus_match") == "yes").sum()),
-              "MANUAL_AGREE": pct(po, 0), "MANUAL_KAPPA": d(kappa, 2)}
+              "MANUAL_AGREE": pct(po), "MANUAL_KAPPA": d(kappa, 2)}
     else:
         v |= {"MANUAL_N": n(len(manual)) if len(manual) else "[chưa có]", "MANUAL_MATCH": "[chưa có]",
               "MANUAL_AGREE": "[chưa có]", "MANUAL_KAPPA": "[chưa có]"}
@@ -389,7 +395,7 @@ def main() -> int:
     lost = ok[ok["repo"].isin(both[both.apply(lambda g: "human" not in g)].index) & (ok["group"] == "agent")]["repo"].value_counts()
     sa = sample[sample["group"] == "agent"]
     codex_share = (sa["agent"] == "OpenAI_Codex").mean()
-    v |= {"CODEX_N": n((sa["agent"] == "OpenAI_Codex").sum()), "CODEX_SHARE": pct(codex_share, 0)}
+    v |= {"CODEX_N": n((sa["agent"] == "OpenAI_Codex").sum()), "CODEX_SHARE": pct(codex_share)}
     v |= {"NOHUMAN_REPOS": n(len(lost)), "NOHUMAN_AGENT_PRS": n(lost.sum()),
           "NOHUMAN_TOP_REPO": lost.index[0] if len(lost) else "", "NOHUMAN_TOP_PRS": n(lost.iloc[0]) if len(lost) else "0"}
     # Cloned repositories in which no agent PR could be measured (not on the first-parent chain, or no source .py change).
@@ -413,6 +419,8 @@ def main() -> int:
     v |= {f"{k}_EN": en(val) for k, val in list(v.items()) if "\n" not in val}
     if cc is not None:
         v["CC_E100_CLAUSE_EN"] = cc_clause_en
+    v["NOT_FOUND_TOP2_EN"] = en(v.pop("NOT_FOUND_TOP2_EN_LIST"))
+    v.pop("NOT_FOUND_TOP2_EN_LIST_EN", None)
     v["RQ3_EXCLUDED_EN"] = ", ".join(f"{AGENT_VI.get(a, a)} ({n(c)} PR{'s' if c != 1 else ''})"
                                      for a, c in s["excluded_agents"].items()) or "none"
     # English versions of the generated tables (English manuscript): same numbers, English number format and labels.
@@ -424,7 +432,7 @@ def main() -> int:
         ("PR đã merge", "Merged PRs"),
         ("PR sửa ít nhất một file Python mã nguồn", "PRs changing at least one Python source file"),
         ("Kho có ít nhất 3 PR như trên", "Repositories with at least 3 such PRs"),
-        ("| Chỉ số | Agent | Người | Hiệu ứng | *p* (Holm) |", "| Indicator | Agent | Human | Effect | *p* (Holm) |"),
+        ("| Chỉ số | Agent | Người | Hiệu ứng | *p* (Holm) |", "| Metric | Agent | Human | Effect | *p* (Holm) |"),
         ("Số cạnh mới khi có thêm: trung vị; TB", "New edges when any are added: median; mean"),
         ("% PR thêm ≥ 1 cạnh package", "% PRs adding ≥ 1 package edge"),
         ("% PR thêm ≥ 1 cạnh", "% PRs adding ≥ 1 edge"),
@@ -438,7 +446,7 @@ def main() -> int:
         ("log(1 + số file thay đổi)", "log(1 + changed files)"), ("Kiểu merge commit", "Merge-commit style"),
         ("Thời điểm merge (năm)", "Merge time (years)"), ("log(1 + số module trước PR)", "log(1 + modules before the PR)"),
         ("| Nhóm quy mô (số dòng) | Chỉ số | Agent | Người | OR | *p* (Holm) |",
-         "| Size group (changed lines) | Indicator | Agent | Human | OR | *p* (Holm) |"),
+         "| Size group (changed lines) | Metric | Agent | Human | OR | *p* (Holm) |"),
         ("% PR thêm cạnh", "% PRs adding edges"),
         ("| Agent | Số PR | Số kho | Số dòng (trung vị) | % PR thêm cạnh | Cạnh mới (TB) |",
          "| Agent | PRs | Repositories | Changed lines (median) | % PRs adding edges | New edges (mean) |"),

@@ -108,8 +108,10 @@ def rates_by_group(d: pd.DataFrame) -> None:
         y = [labels.index(m) + (0.14 if j == 0 else -0.14) for m in s["metric"]]
         ax.errorbar(s["rate"] * 100, y, xerr=[(s["rate"] - s["lo"]) * 100, (s["hi"] - s["rate"]) * 100],
                     fmt=marker, color=color, ms=6, mec="white", mew=0.8, elinewidth=1.6, capsize=0, label=name)
-        for hv, xv, yv, k, n in zip(s["hi"] * 100, s["rate"] * 100, y, s["k"], s["n"]):
-            ax.text(hv + 0.6, yv, f"{vi(xv)}% ({vi_int(k)}/{vi_int(n)})", fontsize=7, color=MUTED, va="center")
+        for hv, xv, yv, k, n, m in zip(s["hi"] * 100, s["rate"] * 100, y, s["k"], s["n"], s["metric"]):
+            # same decimals as the tables: one for adding edges, two for the rare outcomes
+            ax.text(hv + 0.6, yv, f"{vi(xv, 1 if m == labels[0] else 2)}% ({vi_int(k)}/{vi_int(n)})",
+                    fontsize=7, color=MUTED, va="center")
     ax.set_yticks(range(len(labels)), labels)
     ax.invert_yaxis()
     ax.set_xlabel(L("Tỷ lệ PR (%), thanh ngang: khoảng tin cậy Wilson 95%"))
