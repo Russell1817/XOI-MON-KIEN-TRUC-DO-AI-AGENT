@@ -1,5 +1,5 @@
 # Central settings for the pipeline. Change values here, never inside scripts.
-# Any change after a run must also be logged in KE_HOACH/NHAT_KY.md.
+# Changing a value after a run means rerunning the affected steps; every run logs its parameters to results/logs/runs.jsonl.
 
 seed: 42
 
