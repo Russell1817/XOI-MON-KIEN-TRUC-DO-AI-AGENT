@@ -87,14 +87,14 @@ than 100 stars) at revision `7840b6e`.
    | C_new | a package that was in no dependency cycle joins one (strongly connected component of at least two packages) |
    | C_exist | an edge is only added inside cycles that already existed |
    | Δ Ce | change in efferent coupling of the packages the PR changes |
-   | Δ I | change in instability I = Ce/(Ca + Ce) of the core packages (top 10% by Ca) |
+   | Δ I | change in instability I = Ce/(Ca + Ce) of the core packages (top 10% by Ca, ties broken by package name) |
    | Layering violations | new edges against the layers (import-linter `layers` contracts when present, otherwise a conservative directory-name heuristic) |
 
 6. **Statistics.** Mann–Whitney U with Cliff's δ, Fisher's exact test, Kruskal–Wallis with Dunn's post-hoc test,
    Holm correction within each test family, α = 0.05; logistic GEE with PRs clustered by repository, controlling for
    PR size, merge style, merge date and repository size (for RQ3 also with Claude Code separated from the other
    agents). Robustness checks: comparison within PR-size quartiles, repository-paired Wilcoxon test, re-analysis
-   without the repository with the most agent PRs and without OpenAI Codex, alternative graphs, and a correction for
+   without the repository with the most agent PRs and without OpenAI Codex, alternative graphs, core-package thresholds of 5% and 20%, and a correction for
    agent PRs hidden in the human group.
 
 ## Reproducing the results
@@ -112,16 +112,18 @@ than 100 stars) at revision `7840b6e`.
 uv python install 3.12
 uv sync
 uv run python scripts/00_check_env.py        # environment report
-uv run pytest -q                             # 18 unit tests
+uv run pytest -q                             # 19 unit tests
 
 uv run python scripts/01_download_aidev.py   # ~1.4 GB, pinned dataset revision
 uv run python scripts/02_filter_agent_prs.py
 uv run python scripts/03_mine_repos.py --workers 8   # several hours; resumable
 uv run python scripts/04_layer_violations.py
+uv run python scripts/03b_core_sensitivity.py --workers 4   # Δ I at 5%, 10%, 20%; resumable
 uv run python scripts/05b_review_violations.py
 uv run python scripts/05c_screen_human_prs.py # screens human PRs for agent traces on github.com
 uv run python scripts/06_statistics.py
 uv run python scripts/07_figures.py
+uv run python scripts/07_figures.py --lang en   # English labels, *_en files
 uv run python scripts/08_numbers.py          # numbers.json and claims.json
 ```
 
@@ -144,6 +146,7 @@ branch names, agent footers in the PR description, agent co-author trailers, age
 | 02 | `02_filter_agent_prs.py` | `data/interim/agent_prs.csv`, `results/logs/filter_funnel.csv` |
 | 03 | `03_mine_repos.py` | `data/interim/mined/`, `data/interim/mined_prs.csv`, `results/logs/mining_repos.csv` |
 | 04 | `04_layer_violations.py` | `data/processed/pr_metrics.csv`, `data/processed/violations.jsonl`, `config/layer_rules/*.json` |
+| 03b | `03b_core_sensitivity.py` | `data/interim/core_sensitivity/`, `results/tables/core_sensitivity.csv` (Δ I of the core packages at 5%, 10%, 20%; step 06 takes the main Δ I from the 10% column) |
 | 05b | `05b_review_violations.py` | `results/manual_check/violations_review.csv` |
 | 05c | `05c_screen_human_prs.py` | `results/manual_check/human_screen.csv` |
 | 06 | `06_statistics.py` | `results/tables/*.csv` (incl. GEE regression, sensitivity), `stats_summary.json` |
@@ -179,7 +182,7 @@ Commit author names and e-mail addresses are removed from this file.
 
 | Check | Description | Output |
 |---|---|---|
-| Unit tests | 18 tests: import resolution (absolute, relative, `src/` as a layout or as a package, sub-directory roots, external libraries sharing a name with an internal module), test-file filter, renamed files, graph metrics on a small git repository, layer rules (heuristic and import-linter) | `tests/` |
+| Unit tests | 19 tests: import resolution (absolute, relative, `src/` as a layout or as a package, sub-directory roots, external libraries sharing a name with an internal module), test-file filter, renamed files, graph metrics on a small git repository, layer rules (heuristic and import-linter), core packages with tied Ca | `tests/` |
 | Comparison with diffs | During development, samples of 20 PRs (10 agent, 10 human) were compared with their diffs on GitHub after each run; every error found was fixed, covered by a test, and all data were recomputed | project log |
 | Layering violations | Every flagged edge compared with the source code | `results/manual_check/violations_review.csv` |
 | Human-group screening | 50 random human PR pages checked for agent traces | `results/manual_check/human_screen.csv` |

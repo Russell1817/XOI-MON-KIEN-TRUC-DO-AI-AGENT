@@ -81,7 +81,7 @@ def main() -> int:
         review["verdict"] = review["verdict"].astype(str).str.strip().str.lower()
 
     v: dict[str, str] = {}
-    funnel_labels = ["AIDev-pop ban đầu", "Ngôn ngữ chính Python, không phải fork",
+    funnel_labels = ["AIDev-pop ban đầu", "Ngôn ngữ chính Python, không phải bản sao (fork) của kho khác",
                      "Giấy phép mã nguồn mở cho phép dùng lại", "PR đã merge",
                      "PR sửa ít nhất một file Python mã nguồn", "Kho có ít nhất 3 PR như trên"]
     assert len(funnel) == len(funnel_labels), "filter_funnel.csv steps changed; update the labels"
@@ -232,6 +232,21 @@ def main() -> int:
             v |= {f"VAR_{key}_{mk}_A": pct(r["rate_agent"], 2), f"VAR_{key}_{mk}_H": pct(r["rate_human"], 2),
                   f"VAR_{key}_{mk}_OR": d(r["odds_ratio"]), f"VAR_{key}_{mk}_P": p(r["p"])}
     v["TABLE_VARIANTS"] = "\n".join(rows)
+    # Core-package threshold (step 03b): Δ I at 5%, 10% and 20%; sensitivity analysis, so unadjusted p.
+    core_file = t / "robust_core_threshold.csv"
+    core = pd.read_csv(core_file).set_index("fraction") if core_file.exists() else None
+    if core is not None:
+        for frac, key in ((0.05, "05"), (0.10, "10"), (0.20, "20")):
+            r = core.loc[frac]
+            v |= {f"CORE{key}_P": p(r["p"]), f"CORE{key}_DELTA": d(r["cliffs_delta"], 3),
+                  f"CORE{key}_N": n(r["n_agent"] + r["n_human"])}
+        v["CORE_PHOLM_MIN"] = p(core["p_holm"].min())
+        sens = pd.read_csv(t / "core_sensitivity.csv")
+        main10 = metrics[["repo", "number", "group", "d_i_core"]].merge(sens, on=["repo", "number", "group"])
+        same = ((main10["d_i_core"] - main10["d_i_core_10"]).abs() < 1e-9) | (main10["d_i_core"].isna() & main10["d_i_core_10"].isna())
+        # PRs whose Δ I changed once ties in Ca were broken by name (step 04 used set order).
+        v |= {"CORE_MEASURED": n(len(sens)), "CORE_MATCH10": n(int(same.sum())),
+              "CORE_TIE_CHANGED": n(len(sens) - int(same.sum()))}
     # Share of PR-level edges that come only from TYPE_CHECKING imports (all minus runtime variant).
     tc_only = (metrics.loc[metrics["status"] == "ok", "added_edges_all"] - metrics.loc[metrics["status"] == "ok", "added_edges"])
     v["TC_ONLY_EDGES"] = n(tc_only.clip(lower=0).sum())
@@ -348,6 +363,9 @@ def main() -> int:
         v["CC_E100_NS_VS"] = vi_list(ns) or "không agent nào"
         v["CC_E100_CLAUSE"] = (f"khác {v['CC_E100_SIG_VS']}, nhưng không khác {vi_list(ns)}" if ns and sig
                                else "khác tất cả các agent còn lại" if sig else "không khác agent nào")
+        en_list = lambda xs: ", ".join(xs[:-1]) + " and " + xs[-1] if len(xs) > 1 else "".join(xs)  # noqa: E731
+        cc_clause_en = (f"differs from {en_list(sig)} but not from {en_list(ns)}" if ns and sig
+                        else "differs from all other agents" if sig else "does not differ from any other agent")
 
     # Manual check by the two authors (step 05): agreement and tool accuracy.
     yn = lambda col: manual[col].str.strip().str.lower()  # noqa: E731
@@ -374,6 +392,13 @@ def main() -> int:
     v |= {"CODEX_N": n((sa["agent"] == "OpenAI_Codex").sum()), "CODEX_SHARE": pct(codex_share, 0)}
     v |= {"NOHUMAN_REPOS": n(len(lost)), "NOHUMAN_AGENT_PRS": n(lost.sum()),
           "NOHUMAN_TOP_REPO": lost.index[0] if len(lost) else "", "NOHUMAN_TOP_PRS": n(lost.iloc[0]) if len(lost) else "0"}
+    # Cloned repositories in which no agent PR could be measured (not on the first-parent chain, or no source .py change).
+    cloned = set(mining.loc[mining["status"] == "ok", "repo"])
+    noagent = cloned - set(ok.loc[ok["group"] == "agent", "repo"])
+    noagent_status = metrics[(metrics["group"] == "agent") & metrics["repo"].isin(noagent)]["status"].value_counts()
+    v |= {"NOAGENT_REPOS": n(len(noagent)), "NOAGENT_NOTFOUND_PRS": n(noagent_status.get("not_on_first_parent", 0)),
+          "NOAGENT_NOPY_PRS": n(noagent_status.get("no_py_source_change", 0))}
+    repo_chain_ok = len(cloned) - len(noagent) - len(lost) == sample["repo"].nunique()
     pos = sample[sample["added_edges"] > 0]
     pos_a, pos_h = pos[pos["group"] == "agent"]["added_edges"], pos[pos["group"] == "human"]["added_edges"]
     v |= {"ECDF_MED_A": d(pos_a.median(), 0), "ECDF_MED_H": d(pos_h.median(), 0),
@@ -386,6 +411,45 @@ def main() -> int:
         return _re.sub(r"\d[\d.,]*\d|\d", lambda m: m.group(0).translate(str.maketrans({".": ",", ",": "."})), text)
 
     v |= {f"{k}_EN": en(val) for k, val in list(v.items()) if "\n" not in val}
+    if cc is not None:
+        v["CC_E100_CLAUSE_EN"] = cc_clause_en
+    v["RQ3_EXCLUDED_EN"] = ", ".join(f"{AGENT_VI.get(a, a)} ({n(c)} PR{'s' if c != 1 else ''})"
+                                     for a, c in s["excluded_agents"].items()) or "none"
+    # English versions of the generated tables (English manuscript): same numbers, English number format and labels.
+    labels_en = [
+        ("| Bước lọc | Số PR agent | Số kho |", "| Filtering step | Agent PRs | Repositories |"),
+        ("AIDev-pop ban đầu", "AIDev-pop (initial)"),
+        ("Ngôn ngữ chính Python, không phải bản sao (fork) của kho khác", "Primary language Python, not a fork"),
+        ("Giấy phép mã nguồn mở cho phép dùng lại", "Open-source license allowing reuse"),
+        ("PR đã merge", "Merged PRs"),
+        ("PR sửa ít nhất một file Python mã nguồn", "PRs changing at least one Python source file"),
+        ("Kho có ít nhất 3 PR như trên", "Repositories with at least 3 such PRs"),
+        ("| Chỉ số | Agent | Người | Hiệu ứng | *p* (Holm) |", "| Indicator | Agent | Human | Effect | *p* (Holm) |"),
+        ("Số cạnh mới khi có thêm: trung vị; TB", "New edges when any are added: median; mean"),
+        ("% PR thêm ≥ 1 cạnh package", "% PRs adding ≥ 1 package edge"),
+        ("% PR thêm ≥ 1 cạnh", "% PRs adding ≥ 1 edge"),
+        ("% PR chỉ thêm cạnh trong chu trình có sẵn", "% PRs adding edges only inside existing cycles"),
+        ("% PR đưa package mới vào chu trình [KTC 95%]", "% PRs bringing a new package into a cycle [95% CI]"),
+        ("% PR đưa package mới vào chu trình", "% PRs bringing a new package into a cycle"),
+        ("Δ Ce: TB", "Δ Ce: mean"), ("Δ I package lõi: TB", "Δ I of core packages: mean"),
+        ("| Biến | Thêm ≥ 1 cạnh: OR [KTC 95%] | *p* | Đưa package mới vào chu trình: OR [KTC 95%] | *p* |",
+         "| Variable | Adds ≥ 1 edge: OR [95% CI] | *p* | Brings a new package into a cycle: OR [95% CI] | *p* |"),
+        ("PR của agent", "Agent PR"), ("log(1 + số dòng thay đổi)", "log(1 + changed lines)"),
+        ("log(1 + số file thay đổi)", "log(1 + changed files)"), ("Kiểu merge commit", "Merge-commit style"),
+        ("Thời điểm merge (năm)", "Merge time (years)"), ("log(1 + số module trước PR)", "log(1 + modules before the PR)"),
+        ("| Nhóm quy mô (số dòng) | Chỉ số | Agent | Người | OR | *p* (Holm) |",
+         "| Size group (changed lines) | Indicator | Agent | Human | OR | *p* (Holm) |"),
+        ("% PR thêm cạnh", "% PRs adding edges"),
+        ("| Agent | Số PR | Số kho | Số dòng (trung vị) | % PR thêm cạnh | Cạnh mới (TB) |",
+         "| Agent | PRs | Repositories | Changed lines (median) | % PRs adding edges | New edges (mean) |"),
+        ("% PRs adding edges | Cạnh mới (TB) |", "% PRs adding edges | New edges (mean) |"),
+        ("| Agent | Số PR | Số kho | Số dòng (trung vị) |", "| Agent | PRs | Repositories | Changed lines (median) |"),
+    ]
+    for key in ("TABLE_FUNNEL", "TABLE_RQ1", "TABLE_REG", "TABLE_STRATA", "TABLE_RQ3"):
+        t_en = _re.sub(r"\[([^\]\s]+); ([^\]\s]+)\]", r"[\1, \2]", en(v[key]))  # English CI style: [lo, hi]
+        for vi_label, en_label in labels_en:
+            t_en = t_en.replace(vi_label, en_label)
+        v[f"{key}_EN"] = t_en
     out = t / "numbers.json"
     out.write_text(json.dumps(v, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{len(v)} values -> {out}")
@@ -418,6 +482,9 @@ def main() -> int:
         "RQ1: Δ Ce lower for agents (δ < 0), significant after Holm":
             r.loc["d_ce_mean", "cliffs_delta"] < 0 and sig(r.loc["d_ce_mean"]),
         "RQ1: Δ I of core packages not significant": not sig(r.loc["d_i_core"]),
+        # Core threshold: tiny effect at 5%, 10% and 20%; none significant once the three are Holm-adjusted.
+        "Core threshold: |δ| < 0.05 and Holm p > α at 5%, 10%, 20%":
+            core is None or bool((core["cliffs_delta"].abs() < 0.05).all() and (core["p_holm"] > alpha).all()),
         "RQ1: C_new not significant after Holm": not sig(r.loc["cycle_new_pkgs"]),
         "RQ1: C_exist lower for agents, significant after Holm":
             lower(r.loc["cycle_existing_only"]) and sig(r.loc["cycle_existing_only"]),
@@ -480,6 +547,8 @@ def main() -> int:
             lost.iloc[0] / lost.sum() > 0.5,
         "Selection: analysed agent PRs larger than excluded ones, significant":
             s["selection"]["median_analysed"] > s["selection"]["median_excluded"] and s["selection"]["p"] < alpha,
+        "Data: cloned repos minus repos without measured agent PRs minus repos without human PRs = analysed repos":
+            repo_chain_ok,
         "Selection: Codex excluded far more often (analysed share below half of any other agent's)":
             by_agent["OpenAI_Codex"] < 0.5 * min(x for a_, x in by_agent.items() if a_ != "OpenAI_Codex"),
         "Contamination: screened agent involvement found, and correction widens the gap":

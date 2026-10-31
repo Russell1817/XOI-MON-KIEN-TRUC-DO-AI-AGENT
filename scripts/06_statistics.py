@@ -125,6 +125,23 @@ def subsets(d: pd.DataFrame) -> tuple[str, pd.DataFrame]:
     return top, pd.DataFrame(rows)
 
 
+def core_threshold(d: pd.DataFrame) -> pd.DataFrame:
+    """Δ I of the core packages at 5%, 10% and 20% (step 03b), agent vs human on the analysis sample."""
+    f = path("tables") / "core_sensitivity.csv"
+    if not f.exists():
+        return pd.DataFrame()
+    c = pd.read_csv(f).merge(d[["repo", "number", "group"]], on=["repo", "number", "group"], how="inner")
+    rows = []
+    for key in ("05", "10", "20"):
+        col = f"d_i_core_{key}"
+        a, h = c[c["group"] == "agent"][col], c[c["group"] == "human"][col]
+        rows.append({"fraction": int(key) / 100, **compare_two(a, h)})
+    out = pd.DataFrame(rows)
+    out["p_holm"] = holm(out["p"].tolist())
+    out.attrs["prs_measured"] = len(c)
+    return out
+
+
 def graph_variants(d: pd.DataFrame) -> pd.DataFrame:
     """Sensitivity to which imports make an edge: all imports, or module-level imports only."""
     a, h = d[d["group"] == "agent"], d[d["group"] == "human"]
@@ -317,6 +334,15 @@ def main() -> int:
     df = pd.read_csv(path("processed") / "pr_metrics.csv", low_memory=False)
     d = analysis_sample(df)
     tables = path("tables")
+    # Δ I of the core packages comes from step 03b, which breaks ties in Ca by package name; step 04 picked
+    # tied packages in set order, which changed from run to run for a few PRs.
+    core_file = tables / "core_sensitivity.csv"
+    if core_file.exists():
+        core = pd.read_csv(core_file)[["repo", "number", "group", "d_i_core_10"]]
+        d = d.merge(core, on=["repo", "number", "group"], how="left", validate="one_to_one", indicator=True)
+        if (d.pop("_merge") != "both").any():
+            raise SystemExit("core_sensitivity.csv does not cover the analysis sample; rerun step 03b")
+        d["d_i_core"] = d.pop("d_i_core_10")
 
     status = df.groupby(["group", "status"]).size().unstack(fill_value=0)
     status.to_csv(tables / "pr_status_by_group.csv")
@@ -332,6 +358,9 @@ def main() -> int:
     subs.to_csv(tables / "robust_subsets.csv", index=False)
     variants = graph_variants(d)
     variants.to_csv(tables / "robust_graph_variants.csv", index=False)
+    core = core_threshold(d)
+    if len(core):
+        core.to_csv(tables / "robust_core_threshold.csv", index=False)
     reg = regression(d)
     reg.to_csv(tables / "regression_gee.csv", index=False)
     spr = spread(d)
