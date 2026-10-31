@@ -61,12 +61,12 @@ than 100 stars) at revision `7840b6e`.
 2. **Finding PRs in git, without the GitHub API.** Each repository is cloned (bare, shallow from 200 days before its
    first agent PR, blobs larger than 1 MB skipped). On the default branch's first-parent history, a commit titled
    `Merge pull request #N ...` (merge) or ending with `(#N)` (squash) closes PR *N*. The state before the PR is the
-   commit's first parent `M^1`; the state after is `M`.
+   commit's first parent `M′`; the state after is `M`.
 
    <p align="center">
      <img src="results/figures/fig_pr_identification.png" alt="Identifying PRs in git history" width="85%">
      <br><em>Figure 2. A merge commit or a squash commit on the first-parent chain closes a PR; the PR's change is
-     the diff between <code>M^1</code> and <code>M</code> in both cases.</em>
+     the diff between <code>M′</code> and <code>M</code> in both cases.</em>
    </p>
 
 3. **Two groups.** PR numbers listed in AIDev form the agent group. Other PRs merged within ±182 days of the
@@ -94,8 +94,8 @@ than 100 stars) at revision `7840b6e`.
    Holm correction within each test family, α = 0.05; logistic GEE with PRs clustered by repository, controlling for
    PR size, merge style, merge date and repository size (for RQ3 also with Claude Code separated from the other
    agents). Robustness checks: comparison within PR-size quartiles, repository-paired Wilcoxon test, re-analysis
-   without the repository with the most agent PRs and without OpenAI Codex, alternative graphs, core-package thresholds of 5% and 20%, and a correction for
-   agent PRs hidden in the human group.
+   without the repository with the most agent PRs and without OpenAI Codex, alternative graphs, core-package
+   thresholds of 5% and 20%, and a correction for agent PRs hidden in the human group.
 
 ## Reproducing the results
 
@@ -163,7 +163,7 @@ All thresholds, seeds and paths are in `config/settings.yaml`.
 | Column | Meaning |
 |---|---|
 | `repo`, `number`, `group`, `agent` | repository, PR number, `agent` / `human`, agent name or `Human` |
-| `sha_before`, `sha_after`, `merge_style` | commits `M^1` and `M`; `merge` or `squash` |
+| `sha_before`, `sha_after`, `merge_style` | commits `M′` and `M`; `merge` or `squash` |
 | `status` | `ok`, `not_on_first_parent`, `no_py_source_change` or `error` |
 | `loc_changed`, `files_changed`, `py_files_changed` | PR size |
 | `added_edges`, `removed_edges`, `edges_per_file`, `added_pkg_edges` | dependency changes |
@@ -197,7 +197,7 @@ The tool has not yet been evaluated independently on a separate random sample.
 | 1. Measurement pipeline | `fig1_pipeline` | draw.io |
 | 2. Identifying PRs in git history | `fig_pr_identification` | draw.io |
 | 3. Metric example (new edge, C_new, layering violation) | `fig2_metric_example` | draw.io |
-| 4. Rates per indicator and group | `fig3_rates_by_group` | `scripts/07_figures.py` |
+| 4. Rates per metric and group | `fig3_rates_by_group` | `scripts/07_figures.py` |
 | 5. Rates by PR-size quartile | `fig4_size_strata` | `scripts/07_figures.py` |
 | 6. Distribution of new edges (ECDF) | `fig6_edges_ecdf` | `scripts/07_figures.py` |
 | 7. Per-repository comparison | `fig7_repo_scatter` | `scripts/07_figures.py` |
@@ -216,8 +216,8 @@ src/aierosion/   library: data filters, git access, import graph, metrics, layer
 scripts/         numbered pipeline steps 00-08
 tests/           unit tests
 tools/           export of the draw.io diagrams
-data/processed/  final per-PR metrics (data/raw and data/interim are re-created by the scripts)
-results/         tables, figures, manual checks, run logs
+data/processed/  final per-PR metrics, created by step 04 (kept locally until the paper is published)
+results/         figures/ (diagrams and their draw.io sources); tables, checks and logs are created by the scripts
 ```
 
 ## License
